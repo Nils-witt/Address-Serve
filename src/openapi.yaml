@@ -67,6 +67,8 @@ paths:
       summary: Create a street
       operationId: createStreet
       tags: [streets]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -82,6 +84,12 @@ paths:
                 $ref: "#/components/schemas/Street"
         "400":
           description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
           content:
             application/json:
               schema:
@@ -184,6 +192,8 @@ paths:
       summary: Update a street
       operationId: updateStreet
       tags: [streets]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -199,6 +209,12 @@ paths:
                 $ref: "#/components/schemas/Street"
         "400":
           description: Invalid ID or request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
           content:
             application/json:
               schema:
@@ -220,11 +236,19 @@ paths:
       summary: Delete a street
       operationId: deleteStreet
       tags: [streets]
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: Street deleted
         "400":
           description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
           content:
             application/json:
               schema:
@@ -275,6 +299,8 @@ paths:
       summary: Create a house number
       operationId: createHouseNumber
       tags: [house-numbers]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -290,6 +316,12 @@ paths:
                 $ref: "#/components/schemas/HouseNumber"
         "400":
           description: Invalid request body, or streetId does not reference an existing street
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
           content:
             application/json:
               schema:
@@ -333,6 +365,8 @@ paths:
       summary: Update a house number
       operationId: updateHouseNumber
       tags: [house-numbers]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -352,6 +386,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: House number not found
           content:
@@ -363,11 +403,19 @@ paths:
       summary: Delete a house number
       operationId: deleteHouseNumber
       tags: [house-numbers]
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: House number deleted
         "400":
           description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
           content:
             application/json:
               schema:
@@ -380,6 +428,13 @@ paths:
                 $ref: "#/components/schemas/Error"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Required for all non-GET endpoints. Send as `Authorization: Bearer <token>`."
+
   schemas:
     District:
       type: object

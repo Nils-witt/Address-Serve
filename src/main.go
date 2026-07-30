@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/joho/godotenv"
 )
@@ -10,6 +11,11 @@ import (
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Print("no .env file found, relying on environment variables")
+	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable must be set")
 	}
 
 	db, err := openDB()
@@ -33,7 +39,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := loggingMiddleware(corsMiddleware(getenvDefault("CORS_ALLOWED_ORIGIN", "*"))(mux))
+	handler := loggingMiddleware(corsMiddleware(getenvDefault("CORS_ALLOWED_ORIGIN", "*"))(authMiddleware([]byte(jwtSecret))(mux)))
 
 	addr := getenvDefault("LISTEN_ADDR", ":8080")
 	log.Printf("listening on %s", addr)
