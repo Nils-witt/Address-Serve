@@ -1,0 +1,473 @@
+openapi: 3.0.3
+info:
+  title: address-serv API
+  description: API for managing Street and HouseNumber entities.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+
+security: []
+
+tags:
+  - name: streets
+  - name: house-numbers
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [streets]
+      responses:
+        "200":
+          description: Service is healthy
+
+  /api/streets:
+    get:
+      summary: List streets
+      description: Optionally filter by city, district, name and/or postcode. city, district and postcode match exactly (case-insensitive); name matches as a substring (case-insensitive).
+      operationId: listStreets
+      tags: [streets]
+      parameters:
+        - name: city
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter streets with this exact city (case-insensitive)
+        - name: district
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter streets with this exact district (case-insensitive)
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter streets whose name contains this substring (case-insensitive)
+        - name: postcode
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter streets with this exact postcode
+      responses:
+        "200":
+          description: A list of streets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Street"
+    post:
+      summary: Create a street
+      operationId: createStreet
+      tags: [streets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StreetInput"
+      responses:
+        "201":
+          description: The created street
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Street"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A street with this name, district and city already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/cities:
+    get:
+      summary: List distinct cities
+      description: Optionally filter by name (substring, case-insensitive).
+      operationId: listCities
+      tags: [streets]
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter cities whose name contains this substring (case-insensitive)
+      responses:
+        "200":
+          description: A list of distinct city names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: [Bonn, Berlin]
+
+  /api/districts:
+    get:
+      summary: List distinct districts
+      description: Optionally filter by name (substring, case-insensitive) and/or city (exact, case-insensitive).
+      operationId: listDistricts
+      tags: [streets]
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter districts whose name contains this substring (case-insensitive)
+        - name: city
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter districts belonging to this exact city (case-insensitive)
+      responses:
+        "200":
+          description: A list of distinct district names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: [Mitte, Venusberg]
+
+  /api/streets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Street ID
+
+    get:
+      summary: Get a street by ID
+      operationId: getStreet
+      tags: [streets]
+      responses:
+        "200":
+          description: The requested street
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Street"
+        "400":
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Street not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      summary: Update a street
+      operationId: updateStreet
+      tags: [streets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StreetInput"
+      responses:
+        "200":
+          description: The updated street
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Street"
+        "400":
+          description: Invalid ID or request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Street not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A street with this name, district and city already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      summary: Delete a street
+      operationId: deleteStreet
+      tags: [streets]
+      responses:
+        "204":
+          description: Street deleted
+        "400":
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Street not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/house-numbers:
+    get:
+      summary: List house numbers
+      description: Optionally filter by street and/or number.
+      operationId: listHouseNumbers
+      tags: [house-numbers]
+      parameters:
+        - name: streetId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter house numbers belonging to this street
+        - name: number
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter house numbers with this exact number
+      responses:
+        "200":
+          description: A list of house numbers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HouseNumber"
+        "400":
+          description: Invalid streetId or number query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: Create a house number
+      operationId: createHouseNumber
+      tags: [house-numbers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HouseNumberInput"
+      responses:
+        "201":
+          description: The created house number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseNumber"
+        "400":
+          description: Invalid request body, or streetId does not reference an existing street
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/house-numbers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: HouseNumber ID
+
+    get:
+      summary: Get a house number by ID
+      operationId: getHouseNumber
+      tags: [house-numbers]
+      responses:
+        "200":
+          description: The requested house number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseNumber"
+        "400":
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: House number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      summary: Update a house number
+      operationId: updateHouseNumber
+      tags: [house-numbers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HouseNumberInput"
+      responses:
+        "200":
+          description: The updated house number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseNumber"
+        "400":
+          description: Invalid ID or request body, or streetId does not reference an existing street
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: House number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      summary: Delete a house number
+      operationId: deleteHouseNumber
+      tags: [house-numbers]
+      responses:
+        "204":
+          description: House number deleted
+        "400":
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: House number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    StreetInput:
+      type: object
+      required: [city, district, name, postcode, latitude, longitude]
+      properties:
+        city:
+          type: string
+          example: Berlin
+        district:
+          type: string
+          example: Mitte
+        name:
+          type: string
+          example: Alexanderplatz
+        postcode:
+          type: string
+          example: "10178"
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 52.5219
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 13.4132
+
+    Street:
+      allOf:
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+              example: db94a625-aa11-4c37-b9ff-9706e792e7dd
+        - $ref: "#/components/schemas/StreetInput"
+
+    HouseNumberInput:
+      type: object
+      required: [streetId, number, latitude, longitude]
+      properties:
+        streetId:
+          type: string
+          format: uuid
+          description: ID of the referenced Street entity
+          example: db94a625-aa11-4c37-b9ff-9706e792e7dd
+        number:
+          type: integer
+          minimum: 1
+          example: 12
+        numberAddition:
+          type: string
+          nullable: true
+          description: Optional suffix, e.g. "a" or "b"
+          example: a
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 52.5210
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 13.4130
+
+    HouseNumber:
+      allOf:
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+              example: 094d22c5-9ec0-4917-b2b2-b82a5a89523d
+        - $ref: "#/components/schemas/HouseNumberInput"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      example:
+        error: street not found
