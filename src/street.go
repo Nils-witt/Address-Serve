@@ -124,8 +124,13 @@ type districtFilter struct {
 	City string
 }
 
-func (st *streetStore) listDistricts(filter districtFilter) ([]string, error) {
-	query := `SELECT DISTINCT district FROM streets`
+type District struct {
+	Name string `json:"name"`
+	City string `json:"city"`
+}
+
+func (st *streetStore) listDistricts(filter districtFilter) ([]District, error) {
+	query := `SELECT DISTINCT district, city FROM streets`
 	var conditions []string
 	var args []any
 
@@ -140,9 +145,23 @@ func (st *streetStore) listDistricts(filter districtFilter) ([]string, error) {
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-	query += " ORDER BY district"
+	query += " ORDER BY district, city"
 
-	return queryStrings(st.db, query, args...)
+	rows, err := st.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	districts := []District{}
+	for rows.Next() {
+		var d District
+		if err := rows.Scan(&d.Name, &d.City); err != nil {
+			return nil, err
+		}
+		districts = append(districts, d)
+	}
+	return districts, rows.Err()
 }
 
 func queryStrings(db *sql.DB, query string, args ...any) ([]string, error) {

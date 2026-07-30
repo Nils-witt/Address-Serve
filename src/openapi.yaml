@@ -138,14 +138,13 @@ paths:
           description: Filter districts belonging to this exact city (case-insensitive)
       responses:
         "200":
-          description: A list of distinct district names
+          description: A list of distinct districts
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: string
-                example: [Mitte, Venusberg]
+                  $ref: "#/components/schemas/District"
 
   /api/streets/{id}:
     parameters:
@@ -382,6 +381,16 @@ paths:
 
 components:
   schemas:
+    District:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Mitte
+        city:
+          type: string
+          example: Berlin
+
     StreetInput:
       type: object
       required: [city, district, name, postcode, latitude, longitude]
