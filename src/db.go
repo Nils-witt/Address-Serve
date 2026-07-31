@@ -43,11 +43,15 @@ CREATE TABLE IF NOT EXISTS streets (
 	city TEXT NOT NULL,
 	district TEXT NOT NULL,
 	name TEXT NOT NULL,
-	postcode TEXT NOT NULL,
 	latitude DOUBLE PRECISION NOT NULL,
 	longitude DOUBLE PRECISION NOT NULL,
 	UNIQUE (name, district, city)
 );`
+
+// Drops the postcode column from databases created before postcode moved to
+// house_numbers. No-op once the column is already gone.
+const dropStreetsPostcodeColumn = `
+ALTER TABLE streets DROP COLUMN IF EXISTS postcode;`
 
 // Adds the uniqueness constraint to databases created before it was part of
 // createStreetsTable. The constraint name matches Postgres's default naming
@@ -68,9 +72,17 @@ CREATE TABLE IF NOT EXISTS house_numbers (
 	street_id UUID NOT NULL REFERENCES streets(id) ON DELETE CASCADE,
 	number INTEGER NOT NULL,
 	number_addition TEXT,
+	postcode TEXT NOT NULL,
 	latitude DOUBLE PRECISION NOT NULL,
 	longitude DOUBLE PRECISION NOT NULL
 );`
+
+// Adds the postcode column to databases created before it moved here from
+// streets. The default is dropped immediately after backfilling existing
+// rows so new inserts must supply a postcode explicitly.
+const addHouseNumbersPostcodeColumn = `
+ALTER TABLE house_numbers ADD COLUMN IF NOT EXISTS postcode TEXT NOT NULL DEFAULT '';
+ALTER TABLE house_numbers ALTER COLUMN postcode DROP DEFAULT;`
 
 func migrate(db *sql.DB) error {
 	if _, err := db.Exec(createStreetsTable); err != nil {
@@ -79,6 +91,12 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(addStreetsUniqueConstraint); err != nil {
 		return err
 	}
-	_, err := db.Exec(createHouseNumbersTable)
+	if _, err := db.Exec(dropStreetsPostcodeColumn); err != nil {
+		return err
+	}
+	if _, err := db.Exec(createHouseNumbersTable); err != nil {
+		return err
+	}
+	_, err := db.Exec(addHouseNumbersPostcodeColumn)
 	return err
 }

@@ -18,6 +18,7 @@ type HouseNumber struct {
 	StreetID       uuid.UUID `json:"streetId"`
 	Number         int       `json:"number"`
 	NumberAddition *string   `json:"numberAddition,omitempty"`
+	Postcode       string    `json:"postcode"`
 	Latitude       float64   `json:"latitude"`
 	Longitude      float64   `json:"longitude"`
 }
@@ -28,6 +29,9 @@ func (h HouseNumber) validate() error {
 	}
 	if h.Number <= 0 {
 		return errors.New("number must be positive")
+	}
+	if h.Postcode == "" {
+		return errors.New("postcode is required")
 	}
 	if h.Latitude < -90 || h.Latitude > 90 {
 		return errors.New("latitude must be between -90 and 90")
@@ -51,9 +55,9 @@ type houseNumberStore struct {
 
 func (st *houseNumberStore) create(h HouseNumber) (HouseNumber, error) {
 	err := st.db.QueryRow(
-		`INSERT INTO house_numbers (street_id, number, number_addition, latitude, longitude)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		h.StreetID, h.Number, h.NumberAddition, h.Latitude, h.Longitude,
+		`INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude,
 	).Scan(&h.ID)
 	if isForeignKeyViolation(err) {
 		return HouseNumber{}, errStreetNotFound
@@ -67,7 +71,7 @@ type houseNumberFilter struct {
 }
 
 func (st *houseNumberStore) list(filter houseNumberFilter) ([]HouseNumber, error) {
-	query := `SELECT id, street_id, number, number_addition, latitude, longitude FROM house_numbers`
+	query := `SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers`
 	var conditions []string
 	var args []any
 
@@ -93,7 +97,7 @@ func (st *houseNumberStore) list(filter houseNumberFilter) ([]HouseNumber, error
 	houseNumbers := []HouseNumber{}
 	for rows.Next() {
 		var h HouseNumber
-		if err := rows.Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Latitude, &h.Longitude); err != nil {
+		if err := rows.Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude); err != nil {
 			return nil, err
 		}
 		houseNumbers = append(houseNumbers, h)
@@ -104,16 +108,16 @@ func (st *houseNumberStore) list(filter houseNumberFilter) ([]HouseNumber, error
 func (st *houseNumberStore) get(id uuid.UUID) (HouseNumber, error) {
 	var h HouseNumber
 	err := st.db.QueryRow(
-		`SELECT id, street_id, number, number_addition, latitude, longitude FROM house_numbers WHERE id = $1`, id,
-	).Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Latitude, &h.Longitude)
+		`SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers WHERE id = $1`, id,
+	).Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude)
 	return h, err
 }
 
 func (st *houseNumberStore) update(id uuid.UUID, h HouseNumber) (HouseNumber, error) {
 	h.ID = id
 	res, err := st.db.Exec(
-		`UPDATE house_numbers SET street_id=$1, number=$2, number_addition=$3, latitude=$4, longitude=$5 WHERE id=$6`,
-		h.StreetID, h.Number, h.NumberAddition, h.Latitude, h.Longitude, id,
+		`UPDATE house_numbers SET street_id=$1, number=$2, number_addition=$3, postcode=$4, latitude=$5, longitude=$6 WHERE id=$7`,
+		h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude, id,
 	)
 	if isForeignKeyViolation(err) {
 		return HouseNumber{}, errStreetNotFound

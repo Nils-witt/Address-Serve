@@ -115,7 +115,6 @@ def upload_streets(streets):
             "city": street["city"],
             "district": street["district"],
             "name": street["name"],
-            "postcode": PLACEHOLDER_POSTCODE,
             "latitude": street["latitude"],
             "longitude": street["longitude"],
         }
@@ -128,7 +127,7 @@ def upload_streets(streets):
 
         street_id = created_street["id"]
         for house_number in street["house_numbers"]:
-            house_number_payload = dict(house_number, streetId=street_id)
+            house_number_payload = dict(house_number, streetId=street_id, postcode=PLACEHOLDER_POSTCODE)
             try:
                 post_json("/api/house-numbers", house_number_payload)
                 uploaded += 1
