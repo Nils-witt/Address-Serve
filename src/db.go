@@ -43,9 +43,10 @@ CREATE TABLE IF NOT EXISTS streets (
 	city TEXT NOT NULL,
 	district TEXT NOT NULL,
 	name TEXT NOT NULL,
+	country TEXT NOT NULL,
 	latitude DOUBLE PRECISION NOT NULL,
 	longitude DOUBLE PRECISION NOT NULL,
-	UNIQUE (name, district, city)
+	UNIQUE (name, district, city, country)
 );`
 
 // Drops the postcode column from databases created before postcode moved to
@@ -53,16 +54,28 @@ CREATE TABLE IF NOT EXISTS streets (
 const dropStreetsPostcodeColumn = `
 ALTER TABLE streets DROP COLUMN IF EXISTS postcode;`
 
+// Adds the country column to databases created before it was part of
+// createStreetsTable. The default is dropped immediately after backfilling
+// existing rows so new inserts must supply a country explicitly.
+const addStreetsCountryColumn = `
+ALTER TABLE streets ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
+ALTER TABLE streets ALTER COLUMN country DROP DEFAULT;`
+
 // Adds the uniqueness constraint to databases created before it was part of
-// createStreetsTable. The constraint name matches Postgres's default naming
-// so this is a no-op once the constraint already exists.
+// createStreetsTable, replacing the older constraint that predates the
+// country column. Both checks make this a no-op once already applied.
 const addStreetsUniqueConstraint = `
 DO $$
 BEGIN
-	IF NOT EXISTS (
+	IF EXISTS (
 		SELECT 1 FROM pg_constraint WHERE conname = 'streets_name_district_city_key'
 	) THEN
-		ALTER TABLE streets ADD CONSTRAINT streets_name_district_city_key UNIQUE (name, district, city);
+		ALTER TABLE streets DROP CONSTRAINT streets_name_district_city_key;
+	END IF;
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint WHERE conname = 'streets_name_district_city_country_key'
+	) THEN
+		ALTER TABLE streets ADD CONSTRAINT streets_name_district_city_country_key UNIQUE (name, district, city, country);
 	END IF;
 END $$;`
 
@@ -86,6 +99,9 @@ ALTER TABLE house_numbers ALTER COLUMN postcode DROP DEFAULT;`
 
 func migrate(db *sql.DB) error {
 	if _, err := db.Exec(createStreetsTable); err != nil {
+		return err
+	}
+	if _, err := db.Exec(addStreetsCountryColumn); err != nil {
 		return err
 	}
 	if _, err := db.Exec(addStreetsUniqueConstraint); err != nil {

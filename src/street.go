@@ -17,13 +17,14 @@ type Street struct {
 	City      string    `json:"city"`
 	District  string    `json:"district"`
 	Name      string    `json:"name"`
+	Country   string    `json:"country"`
 	Latitude  float64   `json:"latitude"`
 	Longitude float64   `json:"longitude"`
 }
 
 func (s Street) validate() error {
-	if s.City == "" || s.District == "" || s.Name == "" {
-		return errors.New("city, district and name are required")
+	if s.City == "" || s.District == "" || s.Name == "" || s.Country == "" {
+		return errors.New("city, district, name and country are required")
 	}
 	if s.Latitude < -90 || s.Latitude > 90 {
 		return errors.New("latitude must be between -90 and 90")
@@ -34,7 +35,7 @@ func (s Street) validate() error {
 	return nil
 }
 
-var errStreetAlreadyExists = errors.New("a street with this name, district and city already exists")
+var errStreetAlreadyExists = errors.New("a street with this name, district, city and country already exists")
 
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
@@ -47,9 +48,9 @@ type streetStore struct {
 
 func (st *streetStore) create(s Street) (Street, error) {
 	err := st.db.QueryRow(
-		`INSERT INTO streets (city, district, name, latitude, longitude)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		s.City, s.District, s.Name, s.Latitude, s.Longitude,
+		`INSERT INTO streets (city, district, name, country, latitude, longitude)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude,
 	).Scan(&s.ID)
 	if isUniqueViolation(err) {
 		return Street{}, errStreetAlreadyExists
@@ -61,10 +62,11 @@ type streetFilter struct {
 	City     string
 	District string
 	Name     string
+	Country  string
 }
 
 func (st *streetStore) list(filter streetFilter) ([]Street, error) {
-	query := `SELECT id, city, district, name, latitude, longitude FROM streets`
+	query := `SELECT id, city, district, name, country, latitude, longitude FROM streets`
 	var conditions []string
 	var args []any
 
@@ -75,6 +77,10 @@ func (st *streetStore) list(filter streetFilter) ([]Street, error) {
 	if filter.District != "" {
 		args = append(args, filter.District)
 		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", len(args)))
+	}
+	if filter.Country != "" {
+		args = append(args, filter.Country)
+		conditions = append(conditions, fmt.Sprintf("country ILIKE $%d", len(args)))
 	}
 	if filter.Name != "" {
 		args = append(args, "%"+filter.Name+"%")
@@ -94,7 +100,7 @@ func (st *streetStore) list(filter streetFilter) ([]Street, error) {
 	streets := []Street{}
 	for rows.Next() {
 		var s Street
-		if err := rows.Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Latitude, &s.Longitude); err != nil {
+		if err := rows.Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude); err != nil {
 			return nil, err
 		}
 		streets = append(streets, s)
@@ -179,16 +185,16 @@ func queryStrings(db *sql.DB, query string, args ...any) ([]string, error) {
 func (st *streetStore) get(id uuid.UUID) (Street, error) {
 	var s Street
 	err := st.db.QueryRow(
-		`SELECT id, city, district, name, latitude, longitude FROM streets WHERE id = $1`, id,
-	).Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Latitude, &s.Longitude)
+		`SELECT id, city, district, name, country, latitude, longitude FROM streets WHERE id = $1`, id,
+	).Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude)
 	return s, err
 }
 
 func (st *streetStore) update(id uuid.UUID, s Street) (Street, error) {
 	s.ID = id
 	res, err := st.db.Exec(
-		`UPDATE streets SET city=$1, district=$2, name=$3, latitude=$4, longitude=$5 WHERE id=$6`,
-		s.City, s.District, s.Name, s.Latitude, s.Longitude, id,
+		`UPDATE streets SET city=$1, district=$2, name=$3, country=$4, latitude=$5, longitude=$6 WHERE id=$7`,
+		s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude, id,
 	)
 	if isUniqueViolation(err) {
 		return Street{}, errStreetAlreadyExists
@@ -264,6 +270,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			City:     query.Get("city"),
 			District: query.Get("district"),
 			Name:     query.Get("name"),
+			Country:  query.Get("country"),
 		}
 		streets, err := store.list(filter)
 		if err != nil {

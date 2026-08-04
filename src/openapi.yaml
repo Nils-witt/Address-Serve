@@ -27,7 +27,7 @@ paths:
   /api/streets:
     get:
       summary: List streets
-      description: Optionally filter by city, district and/or name. city and district match exactly (case-insensitive); name matches as a substring (case-insensitive).
+      description: Optionally filter by city, district, country and/or name. city, district and country match exactly (case-insensitive); name matches as a substring (case-insensitive).
       operationId: listStreets
       tags: [streets]
       parameters:
@@ -43,6 +43,12 @@ paths:
           schema:
             type: string
           description: Filter streets with this exact district (case-insensitive)
+        - name: country
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter streets with this exact country (case-insensitive)
         - name: name
           in: query
           required: false
@@ -90,7 +96,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: A street with this name, district and city already exists
+          description: A street with this name, district, city and country already exists
           content:
             application/json:
               schema:
@@ -221,7 +227,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: A street with this name, district and city already exists
+          description: A street with this name, district, city and country already exists
           content:
             application/json:
               schema:
@@ -298,7 +304,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: A street with this name, district and city already exists
+          description: A street with this name, district, city and country already exists
           content:
             application/json:
               schema:
@@ -492,7 +498,7 @@ components:
 
     StreetInput:
       type: object
-      required: [city, district, name, latitude, longitude]
+      required: [city, district, name, country, latitude, longitude]
       properties:
         city:
           type: string
@@ -503,6 +509,9 @@ components:
         name:
           type: string
           example: Alexanderplatz
+        country:
+          type: string
+          example: Germany
         latitude:
           type: number
           format: double
@@ -603,7 +612,7 @@ components:
 
     BulkStreetInput:
       type: object
-      required: [city, district, name, latitude, longitude]
+      required: [city, district, name, country, latitude, longitude]
       properties:
         city:
           type: string
@@ -614,6 +623,9 @@ components:
         name:
           type: string
           example: Alexanderplatz
+        country:
+          type: string
+          example: Germany
         latitude:
           type: number
           format: double

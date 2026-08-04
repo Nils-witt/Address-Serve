@@ -36,13 +36,14 @@ type BulkStreetInput struct {
 	City         string                 `json:"city"`
 	District     string                 `json:"district"`
 	Name         string                 `json:"name"`
+	Country      string                 `json:"country"`
 	Latitude     float64                `json:"latitude"`
 	Longitude    float64                `json:"longitude"`
 	HouseNumbers []BulkHouseNumberInput `json:"houseNumbers"`
 }
 
 func (s BulkStreetInput) validate() error {
-	street := Street{City: s.City, District: s.District, Name: s.Name, Latitude: s.Latitude, Longitude: s.Longitude}
+	street := Street{City: s.City, District: s.District, Name: s.Name, Country: s.Country, Latitude: s.Latitude, Longitude: s.Longitude}
 	if err := street.validate(); err != nil {
 		return err
 	}
@@ -74,11 +75,11 @@ func (bs *bulkStore) create(inputs []BulkStreetInput) ([]BulkResult, error) {
 
 	results := make([]BulkResult, 0, len(inputs))
 	for i, input := range inputs {
-		street := Street{City: input.City, District: input.District, Name: input.Name, Latitude: input.Latitude, Longitude: input.Longitude}
+		street := Street{City: input.City, District: input.District, Name: input.Name, Country: input.Country, Latitude: input.Latitude, Longitude: input.Longitude}
 		err := tx.QueryRow(
-			`INSERT INTO streets (city, district, name, latitude, longitude)
-			 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-			street.City, street.District, street.Name, street.Latitude, street.Longitude,
+			`INSERT INTO streets (city, district, name, country, latitude, longitude)
+			 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+			street.City, street.District, street.Name, street.Country, street.Latitude, street.Longitude,
 		).Scan(&street.ID)
 		if isUniqueViolation(err) {
 			return nil, fmt.Errorf("streets[%d]: %w", i, errStreetAlreadyExists)
