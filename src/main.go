@@ -30,10 +30,12 @@ func main() {
 
 	streets := &streetStore{db: db}
 	houseNumbers := &houseNumberStore{db: db}
+	bulk := &bulkStore{db: db}
 
 	mux := http.NewServeMux()
 	registerStreetRoutes(mux, streets)
 	registerHouseNumberRoutes(mux, houseNumbers)
+	registerBulkRoutes(mux, bulk)
 	registerDocsRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
