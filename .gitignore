@@ -4,6 +4,9 @@ data/
 .claude/
 .agents/
 agent/
+.idea/
+node_modules/
+__pycache__/
 
 
 skills-lock.json
