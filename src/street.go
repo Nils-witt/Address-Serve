@@ -68,6 +68,7 @@ type streetFilter struct {
 func (st *streetStore) list(filter streetFilter) ([]Street, error) {
 	query := `SELECT id, city, district, name, country, latitude, longitude FROM streets`
 	var conditions []string
+
 	var args []any
 
 	if filter.City != "" {

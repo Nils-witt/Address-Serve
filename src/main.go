@@ -8,10 +8,17 @@ import (
 	"github.com/joho/godotenv"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+)
+
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Print("no .env file found, relying on environment variables")
 	}
+
+	log.Printf("address-serv %s (%s)", version, commit)
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
