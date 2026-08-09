@@ -1,15 +1,22 @@
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
+from pathlib import Path
 
 GEOJSON_URL = "https://stadtplan.bonn.de/geojson?OD=171"
 API_BASE_URL = "http://localhost:8080"
+POSTCODES_PATH = Path(__file__).resolve().parent / "postcodes.geojson"
 
-# The source dataset has no postal code field, so every street is uploaded
-# with this placeholder. Replace it once a real postcode source is wired up.
-PLACEHOLDER_POSTCODE = "00000"
+# POST /api/streets and POST /api/house-numbers require a bearer token
+# signed with the API's JWT_SECRET (see src/auth.go).
+API_TOKEN = os.environ.get("API_TOKEN")
+
+# Used for house numbers that don't fall inside any boundary in
+# postcodes.geojson (e.g. points just outside its coverage area).
+FALLBACK_POSTCODE = "00000"
 
 
 def download_geojson(url):
@@ -17,10 +24,85 @@ def download_geojson(url):
         return json.load(response)
 
 
-def group_streets(features):
+def _bbox(ring):
+    lons = [p[0] for p in ring]
+    lats = [p[1] for p in ring]
+    return min(lons), min(lats), max(lons), max(lats)
+
+
+def load_postcode_boundaries(path):
+    """Load postal code boundary polygons from an Overpass GeoJSON export.
+
+    Returns a list of (postal_code, exterior_ring, interior_rings, bbox)
+    tuples, one entry per polygon. A MultiPolygon feature expands into
+    multiple entries sharing the same postal_code (disjoint parts, e.g.
+    split by a river). interior_rings holds any holes (e.g. enclaves) to
+    exclude. bbox is (min_lon, min_lat, max_lon, max_lat) of the exterior
+    ring, used as a cheap pre-filter before the exact point-in-ring test.
+    """
+    with open(path) as f:
+        data = json.load(f)
+
+    boundaries = []
+    for feature in data["features"]:
+        geometry = feature["geometry"]
+        geom_type = geometry["type"]
+        postal_code = feature["properties"].get("postal_code")
+        if not postal_code:
+            continue
+
+        if geom_type == "Polygon":
+            polygons = [geometry["coordinates"]]
+        elif geom_type == "MultiPolygon":
+            polygons = geometry["coordinates"]
+        elif geom_type == "LineString":
+            # Raw member way of the boundary relation; the assembled
+            # Polygon/MultiPolygon feature (handled above) carries the
+            # postal_code, so these are expected and safe to skip.
+            continue
+        else:
+            print(f"warning: skipping postcode {postal_code!r}, unsupported geometry {geom_type!r}", file=sys.stderr)
+            continue
+
+        for polygon in polygons:
+            exterior_ring, *interior_rings = polygon
+            boundaries.append((postal_code, exterior_ring, interior_rings, _bbox(exterior_ring)))
+
+    return boundaries
+
+
+def point_in_ring(longitude, latitude, ring):
+    """PNPOLY ray-casting test for whether (longitude, latitude) lies in ring."""
+    inside = False
+    n = len(ring)
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i]
+        xj, yj = ring[j]
+        if (yi > latitude) != (yj > latitude) and longitude < (xj - xi) * (latitude - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def find_postcode(boundaries, longitude, latitude):
+    for postal_code, exterior_ring, interior_rings, bbox in boundaries:
+        min_lon, min_lat, max_lon, max_lat = bbox
+        if not (min_lon <= longitude <= max_lon and min_lat <= latitude <= max_lat):
+            continue
+        if not point_in_ring(longitude, latitude, exterior_ring):
+            continue
+        if any(point_in_ring(longitude, latitude, hole) for hole in interior_rings):
+            continue
+        return postal_code
+    return None
+
+
+def group_streets(features, postcode_boundaries):
     """Group address points by street key into streets with their house numbers."""
     streets = {}
     districts = defaultdict(Counter)
+    unmatched_postcodes = 0
 
     for feature in features:
         props = feature["properties"]
@@ -53,11 +135,17 @@ def group_streets(features):
         if district:
             districts[street_key][district] += 1
 
+        postcode = find_postcode(postcode_boundaries, longitude, latitude)
+        if postcode is None:
+            postcode = FALLBACK_POSTCODE
+            unmatched_postcodes += 1
+
         street["lat_sum"] += latitude
         street["lon_sum"] += longitude
         street["house_numbers"].append({
             "number": number,
             "numberAddition": props.get("hnr_zusatz"),
+            "postcode": postcode,
             "latitude": latitude,
             "longitude": longitude,
         })
@@ -68,6 +156,10 @@ def group_streets(features):
         street["longitude"] = street.pop("lon_sum") / count
         most_common = districts[street_key].most_common(1)
         street["district"] = most_common[0][0] if most_common else ""
+
+    if unmatched_postcodes:
+        print(f"warning: {unmatched_postcodes} house numbers fell outside all postcode boundaries, "
+              f"used fallback {FALLBACK_POSTCODE!r}", file=sys.stderr)
 
     return streets
 
@@ -80,9 +172,10 @@ def get_json(path):
 def post_json(path, payload):
     url = f"{API_BASE_URL}{path}"
     data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}, method="POST",
-    )
+    headers = {"Content-Type": "application/json"}
+    if API_TOKEN:
+        headers["Authorization"] = f"Bearer {API_TOKEN}"
+    request = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(request) as response:
         return json.load(response)
 
@@ -115,6 +208,7 @@ def upload_streets(streets):
             "city": street["city"],
             "district": street["district"],
             "name": street["name"],
+            "country": "Germany",
             "latitude": street["latitude"],
             "longitude": street["longitude"],
         }
@@ -127,7 +221,7 @@ def upload_streets(streets):
 
         street_id = created_street["id"]
         for house_number in street["house_numbers"]:
-            house_number_payload = dict(house_number, streetId=street_id, postcode=PLACEHOLDER_POSTCODE)
+            house_number_payload = dict(house_number, streetId=street_id)
             try:
                 post_json("/api/house-numbers", house_number_payload)
                 uploaded += 1
@@ -147,10 +241,16 @@ def upload_streets(streets):
 
 
 def main():
+    if not API_TOKEN:
+        sys.exit("API_TOKEN environment variable must be set to a bearer token for the address-serv API")
+
+    print(f"loading postcode boundaries from {POSTCODES_PATH}")
+    postcode_boundaries = load_postcode_boundaries(POSTCODES_PATH)
+
     print(f"downloading {GEOJSON_URL}")
     geojson = download_geojson(GEOJSON_URL)
 
-    streets = group_streets(geojson["features"])
+    streets = group_streets(geojson["features"], postcode_boundaries)
     print(f"parsed {len(streets)} streets with {sum(len(s['house_numbers']) for s in streets.values())} house numbers")
 
     upload_streets(streets)

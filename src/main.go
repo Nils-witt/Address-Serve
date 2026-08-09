@@ -1,6 +1,10 @@
+// Command address-serv serves the address lookup and management HTTP API.
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +19,12 @@ var (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	if err := godotenv.Load(); err != nil {
 		log.Print("no .env file found, relying on environment variables")
 	}
@@ -23,17 +33,19 @@ func main() {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET environment variable must be set")
+		return errors.New("JWT_SECRET environment variable must be set")
 	}
 
-	db, err := openDB()
+	ctx := context.Background()
+
+	db, err := openDB(ctx)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
-	if err := migrate(db); err != nil {
-		log.Fatalf("failed to run migrations: %v", err)
+	if err := migrate(ctx, db); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	streets := &streetStore{db: db}
@@ -45,7 +57,7 @@ func main() {
 	registerHouseNumberRoutes(mux, houseNumbers)
 	registerBulkRoutes(mux, bulk)
 	registerDocsRoutes(mux)
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -62,7 +74,6 @@ func main() {
 	}
 
 	log.Printf("listening on %s", addr)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
-	}
+
+	return server.ListenAndServe()
 }

@@ -30,12 +30,12 @@ const docsPageHTML = `<!doctype html>
 </html>`
 
 func registerDocsRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(docsPageHTML))
 	})
 
-	mux.HandleFunc("GET /docs/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /docs/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
 		_, _ = w.Write(openapiSpec)
 	})

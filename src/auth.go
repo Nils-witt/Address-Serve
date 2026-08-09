@@ -14,8 +14,10 @@ type contextKey string
 
 const claimsContextKey contextKey = "claims"
 
-var errMissingAuthHeader = errors.New("missing Authorization header")
-var errMalformedAuthHeader = errors.New("Authorization header must be in the form 'Bearer <token>'")
+var (
+	errMissingAuthHeader   = errors.New("missing Authorization header")
+	errMalformedAuthHeader = errors.New("authorization header must be in the form 'Bearer <token>'")
+)
 
 // authMiddleware requires a valid JWT bearer token for every request except
 // GET, HEAD and OPTIONS, which stay open for read access.
@@ -34,10 +36,12 @@ func authMiddleware(secret []byte) func(http.Handler) http.Handler {
 			}
 
 			claims := jwt.MapClaims{}
+
 			token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 				}
+
 				return secret, nil
 			})
 			if err != nil || !token.Valid {
@@ -56,9 +60,11 @@ func bearerToken(r *http.Request) (string, error) {
 	if header == "" {
 		return "", errMissingAuthHeader
 	}
+
 	scheme, token, found := strings.Cut(header, " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" {
 		return "", errMalformedAuthHeader
 	}
+
 	return token, nil
 }

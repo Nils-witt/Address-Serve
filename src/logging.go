@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -23,6 +24,8 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, time.Since(start))
+		method := strconv.Quote(r.Method)
+		path := strconv.Quote(r.URL.Path)
+		log.Printf("%s %s %d %s", method, path, rec.status, time.Since(start))
 	})
 }

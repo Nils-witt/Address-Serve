@@ -28,18 +28,23 @@ func (h HouseNumber) validate() error {
 	if h.StreetID == uuid.Nil {
 		return errors.New("streetId is required")
 	}
+
 	if h.Number <= 0 {
 		return errors.New("number must be positive")
 	}
+
 	if h.Postcode == "" {
 		return errors.New("postcode is required")
 	}
+
 	if h.Latitude < -90 || h.Latitude > 90 {
 		return errors.New("latitude must be between -90 and 90")
 	}
+
 	if h.Longitude < -180 || h.Longitude > 180 {
 		return errors.New("longitude must be between -180 and 180")
 	}
+
 	return nil
 }
 
@@ -63,6 +68,7 @@ func (st *houseNumberStore) create(ctx context.Context, h HouseNumber) (HouseNum
 	if isForeignKeyViolation(err) {
 		return HouseNumber{}, errStreetNotFound
 	}
+
 	return h, err
 }
 
@@ -73,66 +79,70 @@ type houseNumberFilter struct {
 
 func (st *houseNumberStore) list(ctx context.Context, filter houseNumberFilter) ([]HouseNumber, error) {
 	query := `SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers`
-	var conditions []string
-	var args []any
+
+	var (
+		conditions []string
+		args       []any
+	)
 
 	if filter.StreetID != nil {
 		args = append(args, *filter.StreetID)
 		conditions = append(conditions, fmt.Sprintf("street_id = $%d", len(args)))
 	}
+
 	if filter.Number != nil {
 		args = append(args, *filter.Number)
 		conditions = append(conditions, fmt.Sprintf("number = $%d", len(args)))
 	}
+
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are static "col = $N" fragments, values are parameterized via args
 	}
+
 	query += ` ORDER BY id`
 
 	rows, err := st.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	houseNumbers := []HouseNumber{}
+
 	for rows.Next() {
 		var h HouseNumber
 		if err := rows.Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude); err != nil {
 			return nil, err
 		}
+
 		houseNumbers = append(houseNumbers, h)
 	}
+
 	return houseNumbers, rows.Err()
 }
 
 func (st *houseNumberStore) get(ctx context.Context, id uuid.UUID) (HouseNumber, error) {
 	var h HouseNumber
+
 	err := st.db.QueryRowContext(ctx,
 		`SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers WHERE id = $1`, id,
 	).Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude)
+
 	return h, err
 }
 
 func (st *houseNumberStore) update(ctx context.Context, id uuid.UUID, h HouseNumber) (HouseNumber, error) {
 	h.ID = id
-	res, err := st.db.ExecContext(ctx,
+
+	err := execUpdate(ctx, st.db,
 		`UPDATE house_numbers SET street_id=$1, number=$2, number_addition=$3, postcode=$4, latitude=$5, longitude=$6 WHERE id=$7`,
-		h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude, id,
+		[]any{h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude, id},
+		isForeignKeyViolation, errStreetNotFound,
 	)
-	if isForeignKeyViolation(err) {
-		return HouseNumber{}, errStreetNotFound
-	}
 	if err != nil {
 		return HouseNumber{}, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return HouseNumber{}, err
-	}
-	if n == 0 {
-		return HouseNumber{}, sql.ErrNoRows
-	}
+
 	return h, nil
 }
 
@@ -141,13 +151,16 @@ func (st *houseNumberStore) delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+
 	n, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
+
 	if n == 0 {
 		return sql.ErrNoRows
 	}
+
 	return nil
 }
 
@@ -156,46 +169,65 @@ func houseNumberIDFromRequest(r *http.Request) (uuid.UUID, error) {
 }
 
 func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
-	mux.HandleFunc("POST /api/house-numbers", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/house-numbers", handleCreateHouseNumber(store))
+	mux.HandleFunc("GET /api/house-numbers", handleListHouseNumbers(store))
+	mux.HandleFunc("GET /api/house-numbers/{id}", handleGetHouseNumber(store))
+	mux.HandleFunc("PUT /api/house-numbers/{id}", handleUpdateHouseNumber(store))
+	mux.HandleFunc("DELETE /api/house-numbers/{id}", handleDeleteHouseNumber(store))
+}
+
+//nolint:dupl // mirrors handleCreateStreet; distinct entity types make a shared generic handler less readable than the duplication
+func handleCreateHouseNumber(store *houseNumberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var h HouseNumber
 		if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+
 		if err := h.validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
 		created, err := store.create(r.Context(), h)
 		if errors.Is(err, errStreetNotFound) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusCreated, created)
-	})
 
-	mux.HandleFunc("GET /api/house-numbers", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusCreated, created)
+	}
+}
+
+func handleListHouseNumbers(store *houseNumberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 
 		var filter houseNumberFilter
+
 		if v := query.Get("streetId"); v != "" {
 			id, err := uuid.Parse(v)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, "invalid streetId")
 				return
 			}
+
 			filter.StreetID = &id
 		}
+
 		if v := query.Get("number"); v != "" {
 			n, err := strconv.Atoi(v)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, "invalid number")
 				return
 			}
+
 			filter.Number = &n
 		}
 
@@ -204,73 +236,93 @@ func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, houseNumbers)
-	})
 
-	mux.HandleFunc("GET /api/house-numbers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, houseNumbers)
+	}
+}
+
+//nolint:dupl // mirrors the get/update/delete street handlers; distinct entity types make a shared generic handler less readable than the duplication
+func handleGetHouseNumber(store *houseNumberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := houseNumberIDFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
+
 		h, err := store.get(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "house number not found")
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, h)
-	})
 
-	mux.HandleFunc("PUT /api/house-numbers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, h)
+	}
+}
+
+func handleUpdateHouseNumber(store *houseNumberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := houseNumberIDFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
+
 		var h HouseNumber
 		if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+
 		if err := h.validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
 		updated, err := store.update(r.Context(), id, h)
 		if errors.Is(err, errStreetNotFound) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "house number not found")
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, updated)
-	})
 
-	mux.HandleFunc("DELETE /api/house-numbers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, updated)
+	}
+}
+
+func handleDeleteHouseNumber(store *houseNumberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := houseNumberIDFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
+
 		err = store.delete(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "house number not found")
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
 }

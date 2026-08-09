@@ -24,15 +24,19 @@ func (h BulkHouseNumberInput) validate() error {
 	if h.Number <= 0 {
 		return errors.New("number must be positive")
 	}
+
 	if h.Postcode == "" {
 		return errors.New("postcode is required")
 	}
+
 	if h.Latitude < -90 || h.Latitude > 90 {
 		return errors.New("latitude must be between -90 and 90")
 	}
+
 	if h.Longitude < -180 || h.Longitude > 180 {
 		return errors.New("longitude must be between -180 and 180")
 	}
+
 	return nil
 }
 
@@ -51,11 +55,13 @@ func (s BulkStreetInput) validate() error {
 	if err := street.validate(); err != nil {
 		return err
 	}
+
 	for i, h := range s.HouseNumbers {
 		if err := h.validate(); err != nil {
 			return fmt.Errorf("houseNumbers[%d]: %w", i, err)
 		}
 	}
+
 	return nil
 }
 
@@ -75,11 +81,12 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	results := make([]BulkResult, 0, len(inputs))
 	for i, input := range inputs {
 		street := Street{City: input.City, District: input.District, Name: input.Name, Country: input.Country, Latitude: input.Latitude, Longitude: input.Longitude}
+
 		err := tx.QueryRowContext(ctx,
 			`INSERT INTO streets (city, district, name, country, latitude, longitude)
 			 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -88,6 +95,7 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 		if isUniqueViolation(err) {
 			return nil, fmt.Errorf("streets[%d]: %w", i, errStreetAlreadyExists)
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("streets[%d]: %w", i, err)
 		}
@@ -103,6 +111,7 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+
 	return results, nil
 }
 
@@ -117,6 +126,7 @@ func (bs *bulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetI
 	}
 
 	placeholders := make([]string, 0, len(inputs))
+
 	args := make([]any, 0, len(inputs)*6)
 	for _, h := range inputs {
 		n := len(args)
@@ -124,6 +134,7 @@ func (bs *bulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetI
 		args = append(args, streetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude)
 	}
 
+	//nolint:gosec // G202: placeholders are generated $N markers, values are parameterized via args
 	query := `INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
 		 VALUES ` + strings.Join(placeholders, ", ") + ` RETURNING id`
 
@@ -131,21 +142,25 @@ func (bs *bulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetI
 	if err != nil {
 		return nil, fmt.Errorf("houseNumbers: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	j := 0
 	for rows.Next() {
 		h := inputs[j]
+
 		houseNumber := HouseNumber{StreetID: streetID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude}
 		if err := rows.Scan(&houseNumber.ID); err != nil {
 			return nil, fmt.Errorf("houseNumbers[%d]: %w", j, err)
 		}
+
 		houseNumbers = append(houseNumbers, houseNumber)
 		j++
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("houseNumbers: %w", err)
 	}
+
 	return houseNumbers, nil
 }
 
@@ -156,10 +171,12 @@ func registerBulkRoutes(mux *http.ServeMux, store *bulkStore) {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+
 		if len(inputs) == 0 {
 			writeError(w, http.StatusBadRequest, "at least one street is required")
 			return
 		}
+
 		for i, input := range inputs {
 			if err := input.validate(); err != nil {
 				writeError(w, http.StatusBadRequest, fmt.Sprintf("streets[%d]: %s", i, err.Error()))
@@ -172,10 +189,12 @@ func registerBulkRoutes(mux *http.ServeMux, store *bulkStore) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+
 		writeJSON(w, http.StatusCreated, results)
 	})
 }

@@ -27,12 +27,15 @@ func (s Street) validate() error {
 	if s.City == "" || s.District == "" || s.Name == "" || s.Country == "" {
 		return errors.New("city, district, name and country are required")
 	}
+
 	if s.Latitude < -90 || s.Latitude > 90 {
 		return errors.New("latitude must be between -90 and 90")
 	}
+
 	if s.Longitude < -180 || s.Longitude > 180 {
 		return errors.New("longitude must be between -180 and 180")
 	}
+
 	return nil
 }
 
@@ -56,6 +59,7 @@ func (st *streetStore) create(ctx context.Context, s Street) (Street, error) {
 	if isUniqueViolation(err) {
 		return Street{}, errStreetAlreadyExists
 	}
+
 	return s, err
 }
 
@@ -68,6 +72,7 @@ type streetFilter struct {
 
 func (st *streetStore) list(ctx context.Context, filter streetFilter) ([]Street, error) {
 	query := `SELECT id, city, district, name, country, latitude, longitude FROM streets`
+
 	var conditions []string
 
 	var args []any
@@ -76,48 +81,59 @@ func (st *streetStore) list(ctx context.Context, filter streetFilter) ([]Street,
 		args = append(args, filter.City)
 		conditions = append(conditions, fmt.Sprintf("city ILIKE $%d", len(args)))
 	}
+
 	if filter.District != "" {
 		args = append(args, filter.District)
 		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", len(args)))
 	}
+
 	if filter.Country != "" {
 		args = append(args, filter.Country)
 		conditions = append(conditions, fmt.Sprintf("country ILIKE $%d", len(args)))
 	}
+
 	if filter.Name != "" {
 		args = append(args, "%"+filter.Name+"%")
 		conditions = append(conditions, fmt.Sprintf("name ILIKE $%d", len(args)))
 	}
+
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are static "col ILIKE $N" fragments, values are parameterized via args
 	}
+
 	query += " ORDER BY id"
 
 	rows, err := st.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	streets := []Street{}
+
 	for rows.Next() {
 		var s Street
 		if err := rows.Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude); err != nil {
 			return nil, err
 		}
+
 		streets = append(streets, s)
 	}
+
 	return streets, rows.Err()
 }
 
 func (st *streetStore) listCities(ctx context.Context, name string) ([]string, error) {
 	query := `SELECT DISTINCT city FROM streets`
+
 	var args []any
 	if name != "" {
 		args = append(args, "%"+name+"%")
 		query += fmt.Sprintf(" WHERE city ILIKE $%d", len(args))
 	}
+
 	query += " ORDER BY city"
+
 	return queryStrings(ctx, st.db, query, args...)
 }
 
@@ -133,84 +149,94 @@ type District struct {
 
 func (st *streetStore) listDistricts(ctx context.Context, filter districtFilter) ([]District, error) {
 	query := `SELECT DISTINCT district, city FROM streets`
-	var conditions []string
-	var args []any
+
+	var (
+		conditions []string
+		args       []any
+	)
 
 	if filter.Name != "" {
 		args = append(args, "%"+filter.Name+"%")
 		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", len(args)))
 	}
+
 	if filter.City != "" {
 		args = append(args, filter.City)
 		conditions = append(conditions, fmt.Sprintf("city ILIKE $%d", len(args)))
 	}
+
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are static "col ILIKE $N" fragments, values are parameterized via args
 	}
+
 	query += " ORDER BY district, city"
 
 	rows, err := st.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	districts := []District{}
+
 	for rows.Next() {
 		var d District
 		if err := rows.Scan(&d.Name, &d.City); err != nil {
 			return nil, err
 		}
+
 		districts = append(districts, d)
 	}
+
 	return districts, rows.Err()
 }
 
+// queryStrings runs a single-column SELECT. query is always built by callers
+// from static SQL fragments with values passed only through args, never
+// interpolated into the query text.
 func queryStrings(ctx context.Context, db *sql.DB, query string, args ...any) ([]string, error) {
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, args...) //nolint:gosec // G701: query text is built from static fragments only, values are parameterized via args
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	values := []string{}
+
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
 			return nil, err
 		}
+
 		values = append(values, v)
 	}
+
 	return values, rows.Err()
 }
 
 func (st *streetStore) get(ctx context.Context, id uuid.UUID) (Street, error) {
 	var s Street
+
 	err := st.db.QueryRowContext(ctx,
 		`SELECT id, city, district, name, country, latitude, longitude FROM streets WHERE id = $1`, id,
 	).Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude)
+
 	return s, err
 }
 
 func (st *streetStore) update(ctx context.Context, id uuid.UUID, s Street) (Street, error) {
 	s.ID = id
-	res, err := st.db.ExecContext(ctx,
+
+	err := execUpdate(ctx, st.db,
 		`UPDATE streets SET city=$1, district=$2, name=$3, country=$4, latitude=$5, longitude=$6 WHERE id=$7`,
-		s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude, id,
+		[]any{s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude, id},
+		isUniqueViolation, errStreetAlreadyExists,
 	)
-	if isUniqueViolation(err) {
-		return Street{}, errStreetAlreadyExists
-	}
 	if err != nil {
 		return Street{}, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return Street{}, err
-	}
-	if n == 0 {
-		return Street{}, sql.ErrNoRows
-	}
+
 	return s, nil
 }
 
@@ -219,13 +245,16 @@ func (st *streetStore) delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+
 	n, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
+
 	if n == 0 {
 		return sql.ErrNoRows
 	}
+
 	return nil
 }
 
@@ -244,29 +273,46 @@ func streetIDFromRequest(r *http.Request) (uuid.UUID, error) {
 }
 
 func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
-	mux.HandleFunc("POST /api/streets", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/streets", handleCreateStreet(store))
+	mux.HandleFunc("GET /api/streets", handleListStreets(store))
+	mux.HandleFunc("GET /api/cities", handleListCities(store))
+	mux.HandleFunc("GET /api/districts", handleListDistricts(store))
+	mux.HandleFunc("GET /api/streets/{id}", handleGetStreet(store))
+	mux.HandleFunc("PUT /api/streets/{id}", handleUpdateStreet(store))
+	mux.HandleFunc("DELETE /api/streets/{id}", handleDeleteStreet(store))
+}
+
+//nolint:dupl // mirrors handleCreateHouseNumber; distinct entity types make a shared generic handler less readable than the duplication
+func handleCreateStreet(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var s Street
 		if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+
 		if err := s.validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
 		created, err := store.create(r.Context(), s)
 		if errors.Is(err, errStreetAlreadyExists) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusCreated, created)
-	})
 
-	mux.HandleFunc("GET /api/streets", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusCreated, created)
+	}
+}
+
+func handleListStreets(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		filter := streetFilter{
 			City:     query.Get("city"),
@@ -274,101 +320,129 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			Name:     query.Get("name"),
 			Country:  query.Get("country"),
 		}
+
 		streets, err := store.list(r.Context(), filter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, streets)
-	})
 
-	mux.HandleFunc("GET /api/cities", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, streets)
+	}
+}
+
+func handleListCities(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		cities, err := store.listCities(r.Context(), r.URL.Query().Get("name"))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, cities)
-	})
 
-	mux.HandleFunc("GET /api/districts", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, cities)
+	}
+}
+
+func handleListDistricts(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		filter := districtFilter{
 			Name: query.Get("name"),
 			City: query.Get("city"),
 		}
+
 		districts, err := store.listDistricts(r.Context(), filter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, districts)
-	})
 
-	mux.HandleFunc("GET /api/streets/{id}", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, districts)
+	}
+}
+
+//nolint:dupl // mirrors the get/update/delete house-number handlers; distinct entity types make a shared generic handler less readable than the duplication
+func handleGetStreet(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := streetIDFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
+
 		s, err := store.get(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "street not found")
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, s)
-	})
 
-	mux.HandleFunc("PUT /api/streets/{id}", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, s)
+	}
+}
+
+func handleUpdateStreet(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := streetIDFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
+
 		var s Street
 		if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
+
 		if err := s.validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
 		updated, err := store.update(r.Context(), id, s)
 		if errors.Is(err, errStreetAlreadyExists) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
+
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "street not found")
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, updated)
-	})
 
-	mux.HandleFunc("DELETE /api/streets/{id}", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, updated)
+	}
+}
+
+func handleDeleteStreet(store *streetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := streetIDFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
+
 		err = store.delete(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "street not found")
 			return
 		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
 }
