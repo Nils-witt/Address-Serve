@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/google/uuid"
 )
 
 type BulkHouseNumberInput struct {
@@ -89,18 +92,9 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 			return nil, fmt.Errorf("streets[%d]: %w", i, err)
 		}
 
-		houseNumbers := make([]HouseNumber, 0, len(input.HouseNumbers))
-		for j, h := range input.HouseNumbers {
-			houseNumber := HouseNumber{StreetID: street.ID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude}
-			err := tx.QueryRowContext(ctx,
-				`INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
-				 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-				houseNumber.StreetID, houseNumber.Number, houseNumber.NumberAddition, houseNumber.Postcode, houseNumber.Latitude, houseNumber.Longitude,
-			).Scan(&houseNumber.ID)
-			if err != nil {
-				return nil, fmt.Errorf("streets[%d].houseNumbers[%d]: %w", i, j, err)
-			}
-			houseNumbers = append(houseNumbers, houseNumber)
+		houseNumbers, err := bs.insertHouseNumbers(ctx, tx, street.ID, input.HouseNumbers)
+		if err != nil {
+			return nil, fmt.Errorf("streets[%d].%w", i, err)
 		}
 
 		results = append(results, BulkResult{Street: street, HouseNumbers: houseNumbers})
@@ -110,6 +104,49 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 		return nil, err
 	}
 	return results, nil
+}
+
+// insertHouseNumbers inserts all house numbers for a street with a single
+// multi-row statement instead of one round trip per row. PostgreSQL executes
+// a multi-row VALUES list in the order given and returns RETURNING rows in
+// that same order, so the Nth scanned row corresponds to inputs[N].
+func (bs *bulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetID uuid.UUID, inputs []BulkHouseNumberInput) ([]HouseNumber, error) {
+	houseNumbers := make([]HouseNumber, 0, len(inputs))
+	if len(inputs) == 0 {
+		return houseNumbers, nil
+	}
+
+	placeholders := make([]string, 0, len(inputs))
+	args := make([]any, 0, len(inputs)*6)
+	for _, h := range inputs {
+		n := len(args)
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", n+1, n+2, n+3, n+4, n+5, n+6))
+		args = append(args, streetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude)
+	}
+
+	query := `INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
+		 VALUES ` + strings.Join(placeholders, ", ") + ` RETURNING id`
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("houseNumbers: %w", err)
+	}
+	defer rows.Close()
+
+	j := 0
+	for rows.Next() {
+		h := inputs[j]
+		houseNumber := HouseNumber{StreetID: streetID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude}
+		if err := rows.Scan(&houseNumber.ID); err != nil {
+			return nil, fmt.Errorf("houseNumbers[%d]: %w", j, err)
+		}
+		houseNumbers = append(houseNumbers, houseNumber)
+		j++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("houseNumbers: %w", err)
+	}
+	return houseNumbers, nil
 }
 
 func registerBulkRoutes(mux *http.ServeMux, store *bulkStore) {
