@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -53,8 +54,8 @@ type houseNumberStore struct {
 	db *sql.DB
 }
 
-func (st *houseNumberStore) create(h HouseNumber) (HouseNumber, error) {
-	err := st.db.QueryRow(
+func (st *houseNumberStore) create(ctx context.Context, h HouseNumber) (HouseNumber, error) {
+	err := st.db.QueryRowContext(ctx,
 		`INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
 		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
 		h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude,
@@ -70,7 +71,7 @@ type houseNumberFilter struct {
 	Number   *int
 }
 
-func (st *houseNumberStore) list(filter houseNumberFilter) ([]HouseNumber, error) {
+func (st *houseNumberStore) list(ctx context.Context, filter houseNumberFilter) ([]HouseNumber, error) {
 	query := `SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers`
 	var conditions []string
 	var args []any
@@ -88,7 +89,7 @@ func (st *houseNumberStore) list(filter houseNumberFilter) ([]HouseNumber, error
 	}
 	query += ` ORDER BY id`
 
-	rows, err := st.db.Query(query, args...)
+	rows, err := st.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -105,17 +106,17 @@ func (st *houseNumberStore) list(filter houseNumberFilter) ([]HouseNumber, error
 	return houseNumbers, rows.Err()
 }
 
-func (st *houseNumberStore) get(id uuid.UUID) (HouseNumber, error) {
+func (st *houseNumberStore) get(ctx context.Context, id uuid.UUID) (HouseNumber, error) {
 	var h HouseNumber
-	err := st.db.QueryRow(
+	err := st.db.QueryRowContext(ctx,
 		`SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers WHERE id = $1`, id,
 	).Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude)
 	return h, err
 }
 
-func (st *houseNumberStore) update(id uuid.UUID, h HouseNumber) (HouseNumber, error) {
+func (st *houseNumberStore) update(ctx context.Context, id uuid.UUID, h HouseNumber) (HouseNumber, error) {
 	h.ID = id
-	res, err := st.db.Exec(
+	res, err := st.db.ExecContext(ctx,
 		`UPDATE house_numbers SET street_id=$1, number=$2, number_addition=$3, postcode=$4, latitude=$5, longitude=$6 WHERE id=$7`,
 		h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude, id,
 	)
@@ -135,8 +136,8 @@ func (st *houseNumberStore) update(id uuid.UUID, h HouseNumber) (HouseNumber, er
 	return h, nil
 }
 
-func (st *houseNumberStore) delete(id uuid.UUID) error {
-	res, err := st.db.Exec(`DELETE FROM house_numbers WHERE id = $1`, id)
+func (st *houseNumberStore) delete(ctx context.Context, id uuid.UUID) error {
+	res, err := st.db.ExecContext(ctx, `DELETE FROM house_numbers WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,7 @@ func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		created, err := store.create(h)
+		created, err := store.create(r.Context(), h)
 		if errors.Is(err, errStreetNotFound) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -198,7 +199,7 @@ func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
 			filter.Number = &n
 		}
 
-		houseNumbers, err := store.list(filter)
+		houseNumbers, err := store.list(r.Context(), filter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -212,7 +213,7 @@ func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
-		h, err := store.get(id)
+		h, err := store.get(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "house number not found")
 			return
@@ -239,7 +240,7 @@ func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		updated, err := store.update(id, h)
+		updated, err := store.update(r.Context(), id, h)
 		if errors.Is(err, errStreetNotFound) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -261,7 +262,7 @@ func registerHouseNumberRoutes(mux *http.ServeMux, store *houseNumberStore) {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
-		err = store.delete(id)
+		err = store.delete(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "house number not found")
 			return

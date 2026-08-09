@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -66,8 +67,8 @@ type bulkStore struct {
 
 // create inserts every street and its house numbers in a single transaction:
 // either the whole batch is committed, or none of it is.
-func (bs *bulkStore) create(inputs []BulkStreetInput) ([]BulkResult, error) {
-	tx, err := bs.db.Begin()
+func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]BulkResult, error) {
+	tx, err := bs.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func (bs *bulkStore) create(inputs []BulkStreetInput) ([]BulkResult, error) {
 	results := make([]BulkResult, 0, len(inputs))
 	for i, input := range inputs {
 		street := Street{City: input.City, District: input.District, Name: input.Name, Country: input.Country, Latitude: input.Latitude, Longitude: input.Longitude}
-		err := tx.QueryRow(
+		err := tx.QueryRowContext(ctx,
 			`INSERT INTO streets (city, district, name, country, latitude, longitude)
 			 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
 			street.City, street.District, street.Name, street.Country, street.Latitude, street.Longitude,
@@ -91,7 +92,7 @@ func (bs *bulkStore) create(inputs []BulkStreetInput) ([]BulkResult, error) {
 		houseNumbers := make([]HouseNumber, 0, len(input.HouseNumbers))
 		for j, h := range input.HouseNumbers {
 			houseNumber := HouseNumber{StreetID: street.ID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude}
-			err := tx.QueryRow(
+			err := tx.QueryRowContext(ctx,
 				`INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
 				 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
 				houseNumber.StreetID, houseNumber.Number, houseNumber.NumberAddition, houseNumber.Postcode, houseNumber.Latitude, houseNumber.Longitude,
@@ -129,7 +130,7 @@ func registerBulkRoutes(mux *http.ServeMux, store *bulkStore) {
 			}
 		}
 
-		results, err := store.create(inputs)
+		results, err := store.create(r.Context(), inputs)
 		if errors.Is(err, errStreetAlreadyExists) {
 			writeError(w, http.StatusConflict, err.Error())
 			return

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -46,8 +47,8 @@ type streetStore struct {
 	db *sql.DB
 }
 
-func (st *streetStore) create(s Street) (Street, error) {
-	err := st.db.QueryRow(
+func (st *streetStore) create(ctx context.Context, s Street) (Street, error) {
+	err := st.db.QueryRowContext(ctx,
 		`INSERT INTO streets (city, district, name, country, latitude, longitude)
 		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
 		s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude,
@@ -65,7 +66,7 @@ type streetFilter struct {
 	Country  string
 }
 
-func (st *streetStore) list(filter streetFilter) ([]Street, error) {
+func (st *streetStore) list(ctx context.Context, filter streetFilter) ([]Street, error) {
 	query := `SELECT id, city, district, name, country, latitude, longitude FROM streets`
 	var conditions []string
 
@@ -92,7 +93,7 @@ func (st *streetStore) list(filter streetFilter) ([]Street, error) {
 	}
 	query += " ORDER BY id"
 
-	rows, err := st.db.Query(query, args...)
+	rows, err := st.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func (st *streetStore) list(filter streetFilter) ([]Street, error) {
 	return streets, rows.Err()
 }
 
-func (st *streetStore) listCities(name string) ([]string, error) {
+func (st *streetStore) listCities(ctx context.Context, name string) ([]string, error) {
 	query := `SELECT DISTINCT city FROM streets`
 	var args []any
 	if name != "" {
@@ -117,7 +118,7 @@ func (st *streetStore) listCities(name string) ([]string, error) {
 		query += fmt.Sprintf(" WHERE city ILIKE $%d", len(args))
 	}
 	query += " ORDER BY city"
-	return queryStrings(st.db, query, args...)
+	return queryStrings(ctx, st.db, query, args...)
 }
 
 type districtFilter struct {
@@ -130,7 +131,7 @@ type District struct {
 	City string `json:"city"`
 }
 
-func (st *streetStore) listDistricts(filter districtFilter) ([]District, error) {
+func (st *streetStore) listDistricts(ctx context.Context, filter districtFilter) ([]District, error) {
 	query := `SELECT DISTINCT district, city FROM streets`
 	var conditions []string
 	var args []any
@@ -148,7 +149,7 @@ func (st *streetStore) listDistricts(filter districtFilter) ([]District, error) 
 	}
 	query += " ORDER BY district, city"
 
-	rows, err := st.db.Query(query, args...)
+	rows, err := st.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -165,8 +166,8 @@ func (st *streetStore) listDistricts(filter districtFilter) ([]District, error) 
 	return districts, rows.Err()
 }
 
-func queryStrings(db *sql.DB, query string, args ...any) ([]string, error) {
-	rows, err := db.Query(query, args...)
+func queryStrings(ctx context.Context, db *sql.DB, query string, args ...any) ([]string, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +184,17 @@ func queryStrings(db *sql.DB, query string, args ...any) ([]string, error) {
 	return values, rows.Err()
 }
 
-func (st *streetStore) get(id uuid.UUID) (Street, error) {
+func (st *streetStore) get(ctx context.Context, id uuid.UUID) (Street, error) {
 	var s Street
-	err := st.db.QueryRow(
+	err := st.db.QueryRowContext(ctx,
 		`SELECT id, city, district, name, country, latitude, longitude FROM streets WHERE id = $1`, id,
 	).Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude)
 	return s, err
 }
 
-func (st *streetStore) update(id uuid.UUID, s Street) (Street, error) {
+func (st *streetStore) update(ctx context.Context, id uuid.UUID, s Street) (Street, error) {
 	s.ID = id
-	res, err := st.db.Exec(
+	res, err := st.db.ExecContext(ctx,
 		`UPDATE streets SET city=$1, district=$2, name=$3, country=$4, latitude=$5, longitude=$6 WHERE id=$7`,
 		s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude, id,
 	)
@@ -213,8 +214,8 @@ func (st *streetStore) update(id uuid.UUID, s Street) (Street, error) {
 	return s, nil
 }
 
-func (st *streetStore) delete(id uuid.UUID) error {
-	res, err := st.db.Exec(`DELETE FROM streets WHERE id = $1`, id)
+func (st *streetStore) delete(ctx context.Context, id uuid.UUID) error {
+	res, err := st.db.ExecContext(ctx, `DELETE FROM streets WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
@@ -253,7 +254,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		created, err := store.create(s)
+		created, err := store.create(r.Context(), s)
 		if errors.Is(err, errStreetAlreadyExists) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
@@ -273,7 +274,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			Name:     query.Get("name"),
 			Country:  query.Get("country"),
 		}
-		streets, err := store.list(filter)
+		streets, err := store.list(r.Context(), filter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -282,7 +283,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 	})
 
 	mux.HandleFunc("GET /api/cities", func(w http.ResponseWriter, r *http.Request) {
-		cities, err := store.listCities(r.URL.Query().Get("name"))
+		cities, err := store.listCities(r.Context(), r.URL.Query().Get("name"))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -296,7 +297,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			Name: query.Get("name"),
 			City: query.Get("city"),
 		}
-		districts, err := store.listDistricts(filter)
+		districts, err := store.listDistricts(r.Context(), filter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -310,7 +311,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
-		s, err := store.get(id)
+		s, err := store.get(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "street not found")
 			return
@@ -337,7 +338,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		updated, err := store.update(id, s)
+		updated, err := store.update(r.Context(), id, s)
 		if errors.Is(err, errStreetAlreadyExists) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
@@ -359,7 +360,7 @@ func registerStreetRoutes(mux *http.ServeMux, store *streetStore) {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
-		err = store.delete(id)
+		err = store.delete(r.Context(), id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "street not found")
 			return
