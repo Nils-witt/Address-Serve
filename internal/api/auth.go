@@ -22,11 +22,6 @@ var (
 func authMiddleware(verifier *OIDCVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
-				next.ServeHTTP(w, r)
-				return
-			}
-
 			tokenString, err := bearerToken(r)
 			if err != nil {
 				writeError(w, http.StatusUnauthorized, err.Error())
