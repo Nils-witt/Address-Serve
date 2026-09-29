@@ -1,76 +1,9 @@
-package main
+package store
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"os"
-	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
-
-func openDB(ctx context.Context) (*sql.DB, error) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		host := getenvDefault("POSTGRES_HOST", "localhost")
-		port := getenvDefault("POSTGRES_PORT", "5432")
-		user := getenvDefault("POSTGRES_USER", "address_serv")
-		password := getenvDefault("POSTGRES_PASSWORD", "address_serv")
-		dbname := getenvDefault("POSTGRES_DB", "address_serv")
-		sslmode := getenvDefault("POSTGRES_SSLMODE", "disable")
-		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, password, host, port, dbname, sslmode)
-	}
-
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := db.PingContext(ctx); err != nil {
-		return nil, err
-	}
-
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(1 * time.Minute)
-
-	return db, nil
-}
-
-// execUpdate runs an UPDATE statement, mapping a constraint violation
-// recognized by isConflict to conflictErr and a zero row count to
-// sql.ErrNoRows.
-func execUpdate(ctx context.Context, db *sql.DB, query string, args []any, isConflict func(error) bool, conflictErr error) error {
-	res, err := db.ExecContext(ctx, query, args...)
-	if isConflict(err) {
-		return conflictErr
-	}
-
-	if err != nil {
-		return err
-	}
-
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
-}
-
-func getenvDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-
-	return fallback
-}
 
 const createStreetsTable = `
 CREATE TABLE IF NOT EXISTS streets (
@@ -132,7 +65,9 @@ const addHouseNumbersPostcodeColumn = `
 ALTER TABLE house_numbers ADD COLUMN IF NOT EXISTS postcode TEXT NOT NULL DEFAULT '';
 ALTER TABLE house_numbers ALTER COLUMN postcode DROP DEFAULT;`
 
-func migrate(ctx context.Context, db *sql.DB) error {
+// Migrate creates or upgrades the schema. Every statement is idempotent, so it
+// is safe to run on each startup.
+func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, createStreetsTable); err != nil {
 		return err
 	}

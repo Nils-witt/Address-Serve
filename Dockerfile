@@ -3,7 +3,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/address-serv ./src
+RUN CGO_ENABLED=0 go build -o /out/address-serv ./cmd/address-serv
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=build /out/address-serv /address-serv

@@ -5,7 +5,7 @@ project_name: address-serv
 builds:
   - id: address-serv
     binary: address-serv
-    main: ./src
+    main: ./cmd/address-serv
     env:
       - CGO_ENABLED=0
     goos:

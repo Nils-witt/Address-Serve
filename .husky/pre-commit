@@ -4,12 +4,12 @@ if ! command -v golangci-lint >/dev/null 2>&1; then
   echo "husky: golangci-lint not found on PATH, skipping lint (install: https://golangci-lint.run/welcome/install/)" >&2
 else
   echo "husky: running golangci-lint..."
-  golangci-lint run --timeout 5m ./src/...
+  golangci-lint run --timeout 5m ./cmd/... ./internal/...
 fi
 
 if ! command -v govulncheck >/dev/null 2>&1; then
   echo "husky: govulncheck not found on PATH, skipping vuln check (install: go install golang.org/x/vuln/cmd/govulncheck@latest)" >&2
 else
   echo "husky: running govulncheck..."
-  govulncheck ./src/...
+  govulncheck ./cmd/... ./internal/...
 fi

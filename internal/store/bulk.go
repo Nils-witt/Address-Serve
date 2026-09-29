@@ -1,17 +1,16 @@
-package main
+package store
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
+// BulkHouseNumberInput is a house number to create under a BulkStreetInput.
 type BulkHouseNumberInput struct {
 	Number         int     `json:"number"`
 	NumberAddition *string `json:"numberAddition,omitempty"`
@@ -20,7 +19,8 @@ type BulkHouseNumberInput struct {
 	Longitude      float64 `json:"longitude"`
 }
 
-func (h BulkHouseNumberInput) validate() error {
+// Validate reports whether h has all required fields and valid coordinates.
+func (h BulkHouseNumberInput) Validate() error {
 	if h.Number <= 0 {
 		return errors.New("number must be positive")
 	}
@@ -40,6 +40,7 @@ func (h BulkHouseNumberInput) validate() error {
 	return nil
 }
 
+// BulkStreetInput is a street to create together with its house numbers.
 type BulkStreetInput struct {
 	City         string                 `json:"city"`
 	District     string                 `json:"district"`
@@ -50,14 +51,15 @@ type BulkStreetInput struct {
 	HouseNumbers []BulkHouseNumberInput `json:"houseNumbers"`
 }
 
-func (s BulkStreetInput) validate() error {
+// Validate reports whether s and all of its house numbers are valid.
+func (s BulkStreetInput) Validate() error {
 	street := Street{City: s.City, District: s.District, Name: s.Name, Country: s.Country, Latitude: s.Latitude, Longitude: s.Longitude}
-	if err := street.validate(); err != nil {
+	if err := street.Validate(); err != nil {
 		return err
 	}
 
 	for i, h := range s.HouseNumbers {
-		if err := h.validate(); err != nil {
+		if err := h.Validate(); err != nil {
 			return fmt.Errorf("houseNumbers[%d]: %w", i, err)
 		}
 	}
@@ -65,18 +67,25 @@ func (s BulkStreetInput) validate() error {
 	return nil
 }
 
+// BulkResult is a created street and its created house numbers.
 type BulkResult struct {
 	Street       Street        `json:"street"`
 	HouseNumbers []HouseNumber `json:"houseNumbers"`
 }
 
-type bulkStore struct {
+// BulkStore creates streets and house numbers in batches.
+type BulkStore struct {
 	db *sql.DB
 }
 
-// create inserts every street and its house numbers in a single transaction:
+// NewBulkStore returns a BulkStore backed by db.
+func NewBulkStore(db *sql.DB) *BulkStore {
+	return &BulkStore{db: db}
+}
+
+// Create inserts every street and its house numbers in a single transaction:
 // either the whole batch is committed, or none of it is.
-func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]BulkResult, error) {
+func (bs *BulkStore) Create(ctx context.Context, inputs []BulkStreetInput) ([]BulkResult, error) {
 	tx, err := bs.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -93,7 +102,7 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 			street.City, street.District, street.Name, street.Country, street.Latitude, street.Longitude,
 		).Scan(&street.ID)
 		if isUniqueViolation(err) {
-			return nil, fmt.Errorf("streets[%d]: %w", i, errStreetAlreadyExists)
+			return nil, fmt.Errorf("streets[%d]: %w", i, ErrStreetAlreadyExists)
 		}
 
 		if err != nil {
@@ -119,7 +128,7 @@ func (bs *bulkStore) create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 // multi-row statement instead of one round trip per row. PostgreSQL executes
 // a multi-row VALUES list in the order given and returns RETURNING rows in
 // that same order, so the Nth scanned row corresponds to inputs[N].
-func (bs *bulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetID uuid.UUID, inputs []BulkHouseNumberInput) ([]HouseNumber, error) {
+func (bs *BulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetID uuid.UUID, inputs []BulkHouseNumberInput) ([]HouseNumber, error) {
 	houseNumbers := make([]HouseNumber, 0, len(inputs))
 	if len(inputs) == 0 {
 		return houseNumbers, nil
@@ -162,39 +171,4 @@ func (bs *bulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetI
 	}
 
 	return houseNumbers, nil
-}
-
-func registerBulkRoutes(mux *http.ServeMux, store *bulkStore) {
-	mux.HandleFunc("POST /api/bulk", func(w http.ResponseWriter, r *http.Request) {
-		var inputs []BulkStreetInput
-		if err := json.NewDecoder(r.Body).Decode(&inputs); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON body")
-			return
-		}
-
-		if len(inputs) == 0 {
-			writeError(w, http.StatusBadRequest, "at least one street is required")
-			return
-		}
-
-		for i, input := range inputs {
-			if err := input.validate(); err != nil {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("streets[%d]: %s", i, err.Error()))
-				return
-			}
-		}
-
-		results, err := store.create(r.Context(), inputs)
-		if errors.Is(err, errStreetAlreadyExists) {
-			writeError(w, http.StatusConflict, err.Error())
-			return
-		}
-
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		writeJSON(w, http.StatusCreated, results)
-	})
 }
