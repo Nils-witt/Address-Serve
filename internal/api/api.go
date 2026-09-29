@@ -12,7 +12,8 @@ import (
 
 // Config holds the settings NewHandler needs besides the stores.
 type Config struct {
-	JWTSecret         []byte
+	// OIDC verifies bearer tokens issued by an OpenID Connect provider.
+	OIDC              *OIDCVerifier
 	CORSAllowedOrigin string
 }
 
@@ -28,7 +29,7 @@ func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.Hous
 		w.WriteHeader(http.StatusOK)
 	})
 
-	return loggingMiddleware(corsMiddleware(cfg.CORSAllowedOrigin)(authMiddleware(cfg.JWTSecret)(mux)))
+	return loggingMiddleware(corsMiddleware(cfg.CORSAllowedOrigin)(authMiddleware(cfg.OIDC)(mux)))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

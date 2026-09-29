@@ -483,7 +483,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: "Required for all non-GET endpoints. Send as `Authorization: Bearer <token>`."
+      description: >-
+        Required for all non-GET endpoints. Send as `Authorization: Bearer <token>`.
+        The token must be a JWT issued by the configured OpenID Connect
+        provider; it is checked against the provider's JWKS, issuer and audience.
 
   schemas:
     District:

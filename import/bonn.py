@@ -11,7 +11,7 @@ API_BASE_URL = "http://localhost:8080"
 POSTCODES_PATH = Path(__file__).resolve().parent / "postcodes.geojson"
 
 # POST /api/streets and POST /api/house-numbers require a bearer token
-# signed with the API's JWT_SECRET (see src/auth.go).
+# issued by the API's OpenID Connect provider (see internal/api/oidc.go).
 API_TOKEN = os.environ.get("API_TOKEN")
 
 # Used for house numbers that don't fall inside any boundary in

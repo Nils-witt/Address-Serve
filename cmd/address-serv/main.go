@@ -34,12 +34,12 @@ func run() error {
 
 	log.Printf("address-serv %s (%s)", version, commit)
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		return errors.New("JWT_SECRET environment variable must be set")
-	}
-
 	ctx := context.Background()
+
+	oidc, err := oidcVerifier(ctx)
+	if err != nil {
+		return err
+	}
 
 	db, err := store.Open(ctx, databaseURL())
 	if err != nil {
@@ -53,7 +53,7 @@ func run() error {
 
 	handler := api.NewHandler(
 		api.Config{
-			JWTSecret:         []byte(jwtSecret),
+			OIDC:              oidc,
 			CORSAllowedOrigin: getenvDefault("CORS_ALLOWED_ORIGIN", "*"),
 		},
 		store.NewStreetStore(db),
@@ -74,6 +74,26 @@ func run() error {
 	log.Printf("listening on %s", addr)
 
 	return server.ListenAndServe()
+}
+
+// oidcVerifier returns a verifier for tokens issued by the OpenID Connect
+// provider at OIDC_ISSUER_URL.
+func oidcVerifier(ctx context.Context) (*api.OIDCVerifier, error) {
+	issuer := os.Getenv("OIDC_ISSUER_URL")
+	if issuer == "" {
+		return nil, errors.New("OIDC_ISSUER_URL environment variable must be set")
+	}
+
+	verifier, err := api.NewOIDCVerifier(ctx, api.OIDCConfig{
+		IssuerURL: issuer,
+		Audience:  os.Getenv("OIDC_AUDIENCE"),
+		JWKSURL:   os.Getenv("OIDC_JWKS_URL"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to set up OIDC: %w", err)
+	}
+
+	return verifier, nil
 }
 
 // databaseURL returns DATABASE_URL, or builds a DSN from the POSTGRES_*
