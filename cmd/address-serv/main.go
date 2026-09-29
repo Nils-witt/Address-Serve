@@ -45,7 +45,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = store.Close(db) }()
 
 	if err := store.Migrate(ctx, db); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)

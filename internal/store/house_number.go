@@ -2,23 +2,21 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // HouseNumber is an addressable number on a street.
 type HouseNumber struct {
-	ID             uuid.UUID `json:"id"`
-	StreetID       uuid.UUID `json:"streetId"`
-	Number         int       `json:"number"`
+	ID             uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	StreetID       uuid.UUID `json:"streetId" gorm:"type:uuid;not null;index"`
+	Number         int       `json:"number" gorm:"type:integer;not null"`
 	NumberAddition *string   `json:"numberAddition,omitempty"`
-	Postcode       string    `json:"postcode"`
-	Latitude       float64   `json:"latitude"`
-	Longitude      float64   `json:"longitude"`
+	Postcode       string    `json:"postcode" gorm:"not null"`
+	Latitude       float64   `json:"latitude" gorm:"type:double precision;not null"`
+	Longitude      float64   `json:"longitude" gorm:"type:double precision;not null"`
 }
 
 // Validate reports whether h has all required fields and valid coordinates.
@@ -52,22 +50,18 @@ var ErrStreetNotFound = errors.New("referenced street does not exist")
 
 // HouseNumberStore reads and writes house numbers.
 type HouseNumberStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // NewHouseNumberStore returns a HouseNumberStore backed by db.
-func NewHouseNumberStore(db *sql.DB) *HouseNumberStore {
+func NewHouseNumberStore(db *gorm.DB) *HouseNumberStore {
 	return &HouseNumberStore{db: db}
 }
 
 // Create inserts h and returns it with its generated ID.
 func (st *HouseNumberStore) Create(ctx context.Context, h HouseNumber) (HouseNumber, error) {
-	err := st.db.QueryRowContext(ctx,
-		`INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude,
-	).Scan(&h.ID)
-	if isForeignKeyViolation(err) {
+	err := st.db.WithContext(ctx).Create(&h).Error
+	if errors.Is(err, gorm.ErrForeignKeyViolated) {
 		return HouseNumber{}, ErrStreetNotFound
 	}
 
@@ -82,56 +76,27 @@ type HouseNumberFilter struct {
 
 // List returns the house numbers matching filter, ordered by ID.
 func (st *HouseNumberStore) List(ctx context.Context, filter HouseNumberFilter) ([]HouseNumber, error) {
-	query := `SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers`
-
-	var (
-		conditions []string
-		args       []any
-	)
+	query := st.db.WithContext(ctx)
 
 	if filter.StreetID != nil {
-		args = append(args, *filter.StreetID)
-		conditions = append(conditions, fmt.Sprintf("street_id = $%d", len(args)))
+		query = query.Where("street_id = ?", *filter.StreetID)
 	}
 
 	if filter.Number != nil {
-		args = append(args, *filter.Number)
-		conditions = append(conditions, fmt.Sprintf("number = $%d", len(args)))
+		query = query.Where("number = ?", *filter.Number)
 	}
-
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are static "col = $N" fragments, values are parameterized via args
-	}
-
-	query += ` ORDER BY id`
-
-	rows, err := st.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
 
 	houseNumbers := []HouseNumber{}
+	err := query.Order("id").Find(&houseNumbers).Error
 
-	for rows.Next() {
-		var h HouseNumber
-		if err := rows.Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude); err != nil {
-			return nil, err
-		}
-
-		houseNumbers = append(houseNumbers, h)
-	}
-
-	return houseNumbers, rows.Err()
+	return houseNumbers, err
 }
 
 // Get returns the house number with the given ID, or ErrNotFound.
 func (st *HouseNumberStore) Get(ctx context.Context, id uuid.UUID) (HouseNumber, error) {
 	var h HouseNumber
 
-	err := st.db.QueryRowContext(ctx,
-		`SELECT id, street_id, number, number_addition, postcode, latitude, longitude FROM house_numbers WHERE id = $1`, id,
-	).Scan(&h.ID, &h.StreetID, &h.Number, &h.NumberAddition, &h.Postcode, &h.Latitude, &h.Longitude)
+	err := st.db.WithContext(ctx).Take(&h, "id = ?", id).Error
 
 	return h, notFound(err)
 }
@@ -141,12 +106,7 @@ func (st *HouseNumberStore) Get(ctx context.Context, id uuid.UUID) (HouseNumber,
 func (st *HouseNumberStore) Update(ctx context.Context, id uuid.UUID, h HouseNumber) (HouseNumber, error) {
 	h.ID = id
 
-	err := execUpdate(ctx, st.db,
-		`UPDATE house_numbers SET street_id=$1, number=$2, number_addition=$3, postcode=$4, latitude=$5, longitude=$6 WHERE id=$7`,
-		[]any{h.StreetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude, id},
-		isForeignKeyViolation, ErrStreetNotFound,
-	)
-	if err != nil {
+	if err := updateRow(ctx, st.db, &h, gorm.ErrForeignKeyViolated, ErrStreetNotFound); err != nil {
 		return HouseNumber{}, err
 	}
 
@@ -155,10 +115,5 @@ func (st *HouseNumberStore) Update(ctx context.Context, id uuid.UUID, h HouseNum
 
 // Delete removes the house number with the given ID, or returns ErrNotFound.
 func (st *HouseNumberStore) Delete(ctx context.Context, id uuid.UUID) error {
-	res, err := st.db.ExecContext(ctx, `DELETE FROM house_numbers WHERE id = $1`, id)
-	if err != nil {
-		return err
-	}
-
-	return requireOneRow(res)
+	return requireOneRow(st.db.WithContext(ctx).Delete(&HouseNumber{}, "id = ?", id))
 }

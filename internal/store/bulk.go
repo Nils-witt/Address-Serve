@@ -2,12 +2,10 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
-	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // BulkHouseNumberInput is a house number to create under a BulkStreetInput.
@@ -75,100 +73,55 @@ type BulkResult struct {
 
 // BulkStore creates streets and house numbers in batches.
 type BulkStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // NewBulkStore returns a BulkStore backed by db.
-func NewBulkStore(db *sql.DB) *BulkStore {
+func NewBulkStore(db *gorm.DB) *BulkStore {
 	return &BulkStore{db: db}
 }
+
+// houseNumberBatchSize caps the rows per multi-row INSERT, keeping each
+// statement well below PostgreSQL's limit of 65535 bind parameters.
+const houseNumberBatchSize = 1000
 
 // Create inserts every street and its house numbers in a single transaction:
 // either the whole batch is committed, or none of it is.
 func (bs *BulkStore) Create(ctx context.Context, inputs []BulkStreetInput) ([]BulkResult, error) {
-	tx, err := bs.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	results := make([]BulkResult, 0, len(inputs))
-	for i, input := range inputs {
-		street := Street{City: input.City, District: input.District, Name: input.Name, Country: input.Country, Latitude: input.Latitude, Longitude: input.Longitude}
 
-		err := tx.QueryRowContext(ctx,
-			`INSERT INTO streets (city, district, name, country, latitude, longitude)
-			 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-			street.City, street.District, street.Name, street.Country, street.Latitude, street.Longitude,
-		).Scan(&street.ID)
-		if isUniqueViolation(err) {
-			return nil, fmt.Errorf("streets[%d]: %w", i, ErrStreetAlreadyExists)
+	err := bs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i, input := range inputs {
+			street := Street{City: input.City, District: input.District, Name: input.Name, Country: input.Country, Latitude: input.Latitude, Longitude: input.Longitude}
+
+			err := tx.Create(&street).Error
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				return fmt.Errorf("streets[%d]: %w", i, ErrStreetAlreadyExists)
+			}
+
+			if err != nil {
+				return fmt.Errorf("streets[%d]: %w", i, err)
+			}
+
+			houseNumbers := make([]HouseNumber, 0, len(input.HouseNumbers))
+			for _, h := range input.HouseNumbers {
+				houseNumbers = append(houseNumbers, HouseNumber{StreetID: street.ID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude})
+			}
+
+			if len(houseNumbers) > 0 {
+				if err := tx.CreateInBatches(&houseNumbers, houseNumberBatchSize).Error; err != nil {
+					return fmt.Errorf("streets[%d].houseNumbers: %w", i, err)
+				}
+			}
+
+			results = append(results, BulkResult{Street: street, HouseNumbers: houseNumbers})
 		}
 
-		if err != nil {
-			return nil, fmt.Errorf("streets[%d]: %w", i, err)
-		}
-
-		houseNumbers, err := bs.insertHouseNumbers(ctx, tx, street.ID, input.HouseNumbers)
-		if err != nil {
-			return nil, fmt.Errorf("streets[%d].%w", i, err)
-		}
-
-		results = append(results, BulkResult{Street: street, HouseNumbers: houseNumbers})
-	}
-
-	if err := tx.Commit(); err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	return results, nil
-}
-
-// insertHouseNumbers inserts all house numbers for a street with a single
-// multi-row statement instead of one round trip per row. PostgreSQL executes
-// a multi-row VALUES list in the order given and returns RETURNING rows in
-// that same order, so the Nth scanned row corresponds to inputs[N].
-func (bs *BulkStore) insertHouseNumbers(ctx context.Context, tx *sql.Tx, streetID uuid.UUID, inputs []BulkHouseNumberInput) ([]HouseNumber, error) {
-	houseNumbers := make([]HouseNumber, 0, len(inputs))
-	if len(inputs) == 0 {
-		return houseNumbers, nil
-	}
-
-	placeholders := make([]string, 0, len(inputs))
-
-	args := make([]any, 0, len(inputs)*6)
-	for _, h := range inputs {
-		n := len(args)
-		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", n+1, n+2, n+3, n+4, n+5, n+6))
-		args = append(args, streetID, h.Number, h.NumberAddition, h.Postcode, h.Latitude, h.Longitude)
-	}
-
-	//nolint:gosec // G202: placeholders are generated $N markers, values are parameterized via args
-	query := `INSERT INTO house_numbers (street_id, number, number_addition, postcode, latitude, longitude)
-		 VALUES ` + strings.Join(placeholders, ", ") + ` RETURNING id`
-
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("houseNumbers: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	j := 0
-	for rows.Next() {
-		h := inputs[j]
-
-		houseNumber := HouseNumber{StreetID: streetID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude}
-		if err := rows.Scan(&houseNumber.ID); err != nil {
-			return nil, fmt.Errorf("houseNumbers[%d]: %w", j, err)
-		}
-
-		houseNumbers = append(houseNumbers, houseNumber)
-		j++
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("houseNumbers: %w", err)
-	}
-
-	return houseNumbers, nil
 }

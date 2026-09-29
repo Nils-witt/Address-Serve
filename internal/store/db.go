@@ -3,12 +3,14 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
+	"log"
+	"os"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
-	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // ErrNotFound is returned when the requested row does not exist.
@@ -16,94 +18,84 @@ var ErrNotFound = errors.New("not found")
 
 // Open connects to the PostgreSQL database at dsn and verifies the
 // connection.
-func Open(ctx context.Context, dsn string) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
+func Open(ctx context.Context, dsn string) (*gorm.DB, error) {
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		// Maps PostgreSQL constraint violations to gorm.ErrDuplicatedKey and
+		// gorm.ErrForeignKeyViolated.
+		TranslateError: true,
+		Logger: logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+			ParameterizedQueries:      true,
+		}),
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(1 * time.Minute)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		return nil, err
+	}
+
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(25)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(1 * time.Minute)
 
 	return db, nil
 }
 
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+// Close closes the connection pool underlying db.
+func Close(db *gorm.DB) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	return sqlDB.Close()
 }
 
-func isForeignKeyViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23503"
-}
-
-// notFound maps sql.ErrNoRows to ErrNotFound.
+// notFound maps gorm.ErrRecordNotFound to ErrNotFound.
 func notFound(err error) error {
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrNotFound
 	}
 
 	return err
 }
 
-// execUpdate runs an UPDATE statement, mapping a constraint violation
-// recognized by isConflict to conflictErr and a zero row count to
-// ErrNotFound.
-func execUpdate(ctx context.Context, db *sql.DB, query string, args []any, isConflict func(error) bool, conflictErr error) error {
-	res, err := db.ExecContext(ctx, query, args...)
-	if isConflict(err) {
+// updateRow replaces every column of row except its primary key, which must
+// already be set. A constraint violation matching conflict is mapped to
+// conflictErr and a zero row count to ErrNotFound.
+func updateRow(ctx context.Context, db *gorm.DB, row any, conflict, conflictErr error) error {
+	res := db.WithContext(ctx).Model(row).Select("*").Omit("id").Updates(row)
+	if errors.Is(res.Error, conflict) {
 		return conflictErr
 	}
 
-	if err != nil {
-		return err
+	if res.Error != nil {
+		return res.Error
 	}
 
 	return requireOneRow(res)
 }
 
 // requireOneRow returns ErrNotFound if res affected no rows.
-func requireOneRow(res sql.Result) error {
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+func requireOneRow(res *gorm.DB) error {
+	if res.Error != nil {
+		return res.Error
 	}
 
-	if n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 
 	return nil
-}
-
-// queryStrings runs a single-column SELECT. query is always built by callers
-// from static SQL fragments with values passed only through args, never
-// interpolated into the query text.
-func queryStrings(ctx context.Context, db *sql.DB, query string, args ...any) ([]string, error) {
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	values := []string{}
-
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
-			return nil, err
-		}
-
-		values = append(values, v)
-	}
-
-	return values, rows.Err()
 }

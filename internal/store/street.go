@@ -2,23 +2,25 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Street is a named street within a district, city and country.
 type Street struct {
-	ID        uuid.UUID `json:"id"`
-	City      string    `json:"city"`
-	District  string    `json:"district"`
-	Name      string    `json:"name"`
-	Country   string    `json:"country"`
-	Latitude  float64   `json:"latitude"`
-	Longitude float64   `json:"longitude"`
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	City      string    `json:"city" gorm:"not null;uniqueIndex:streets_name_district_city_country_key,priority:3"`
+	District  string    `json:"district" gorm:"not null;uniqueIndex:streets_name_district_city_country_key,priority:2"`
+	Name      string    `json:"name" gorm:"not null;uniqueIndex:streets_name_district_city_country_key,priority:1"`
+	Country   string    `json:"country" gorm:"not null;uniqueIndex:streets_name_district_city_country_key,priority:4"`
+	Latitude  float64   `json:"latitude" gorm:"type:double precision;not null"`
+	Longitude float64   `json:"longitude" gorm:"type:double precision;not null"`
+
+	// HouseNumbers is never loaded; it only declares the foreign key from
+	// house_numbers so deleting a street cascades to its house numbers.
+	HouseNumbers []HouseNumber `json:"-" gorm:"constraint:OnDelete:CASCADE"`
 }
 
 // Validate reports whether s has all required fields and valid coordinates.
@@ -44,22 +46,18 @@ var ErrStreetAlreadyExists = errors.New("a street with this name, district, city
 
 // StreetStore reads and writes streets.
 type StreetStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // NewStreetStore returns a StreetStore backed by db.
-func NewStreetStore(db *sql.DB) *StreetStore {
+func NewStreetStore(db *gorm.DB) *StreetStore {
 	return &StreetStore{db: db}
 }
 
 // Create inserts s and returns it with its generated ID.
 func (st *StreetStore) Create(ctx context.Context, s Street) (Street, error) {
-	err := st.db.QueryRowContext(ctx,
-		`INSERT INTO streets (city, district, name, country, latitude, longitude)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude,
-	).Scan(&s.ID)
-	if isUniqueViolation(err) {
+	err := st.db.WithContext(ctx).Create(&s).Error
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return Street{}, ErrStreetAlreadyExists
 	}
 
@@ -77,72 +75,42 @@ type StreetFilter struct {
 
 // List returns the streets matching filter, ordered by ID.
 func (st *StreetStore) List(ctx context.Context, filter StreetFilter) ([]Street, error) {
-	query := `SELECT id, city, district, name, country, latitude, longitude FROM streets`
-
-	var conditions []string
-
-	var args []any
+	query := st.db.WithContext(ctx)
 
 	if filter.City != "" {
-		args = append(args, filter.City)
-		conditions = append(conditions, fmt.Sprintf("city ILIKE $%d", len(args)))
+		query = query.Where("city ILIKE ?", filter.City)
 	}
 
 	if filter.District != "" {
-		args = append(args, filter.District)
-		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", len(args)))
+		query = query.Where("district ILIKE ?", filter.District)
 	}
 
 	if filter.Country != "" {
-		args = append(args, filter.Country)
-		conditions = append(conditions, fmt.Sprintf("country ILIKE $%d", len(args)))
+		query = query.Where("country ILIKE ?", filter.Country)
 	}
 
 	if filter.Name != "" {
-		args = append(args, "%"+filter.Name+"%")
-		conditions = append(conditions, fmt.Sprintf("name ILIKE $%d", len(args)))
+		query = query.Where("name ILIKE ?", "%"+filter.Name+"%")
 	}
-
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are static "col ILIKE $N" fragments, values are parameterized via args
-	}
-
-	query += " ORDER BY id"
-
-	rows, err := st.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
 
 	streets := []Street{}
+	err := query.Order("id").Find(&streets).Error
 
-	for rows.Next() {
-		var s Street
-		if err := rows.Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude); err != nil {
-			return nil, err
-		}
-
-		streets = append(streets, s)
-	}
-
-	return streets, rows.Err()
+	return streets, err
 }
 
 // ListCities returns the distinct city names containing name, or all cities
 // if name is empty.
 func (st *StreetStore) ListCities(ctx context.Context, name string) ([]string, error) {
-	query := `SELECT DISTINCT city FROM streets`
-
-	var args []any
+	query := st.db.WithContext(ctx).Model(&Street{})
 	if name != "" {
-		args = append(args, "%"+name+"%")
-		query += fmt.Sprintf(" WHERE city ILIKE $%d", len(args))
+		query = query.Where("city ILIKE ?", "%"+name+"%")
 	}
 
-	query += " ORDER BY city"
+	cities := []string{}
+	err := query.Distinct("city").Order("city").Pluck("city", &cities).Error
 
-	return queryStrings(ctx, st.db, query, args...)
+	return cities, err
 }
 
 // DistrictFilter narrows ListDistricts results. Empty fields are ignored.
@@ -159,56 +127,27 @@ type District struct {
 
 // ListDistricts returns the distinct districts matching filter.
 func (st *StreetStore) ListDistricts(ctx context.Context, filter DistrictFilter) ([]District, error) {
-	query := `SELECT DISTINCT district, city FROM streets`
-
-	var (
-		conditions []string
-		args       []any
-	)
+	query := st.db.WithContext(ctx).Model(&Street{})
 
 	if filter.Name != "" {
-		args = append(args, "%"+filter.Name+"%")
-		conditions = append(conditions, fmt.Sprintf("district ILIKE $%d", len(args)))
+		query = query.Where("district ILIKE ?", "%"+filter.Name+"%")
 	}
 
 	if filter.City != "" {
-		args = append(args, filter.City)
-		conditions = append(conditions, fmt.Sprintf("city ILIKE $%d", len(args)))
+		query = query.Where("city ILIKE ?", filter.City)
 	}
-
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ") //nolint:gosec // G202: conditions are static "col ILIKE $N" fragments, values are parameterized via args
-	}
-
-	query += " ORDER BY district, city"
-
-	rows, err := st.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
 
 	districts := []District{}
+	err := query.Distinct("district AS name", "city").Order("district, city").Scan(&districts).Error
 
-	for rows.Next() {
-		var d District
-		if err := rows.Scan(&d.Name, &d.City); err != nil {
-			return nil, err
-		}
-
-		districts = append(districts, d)
-	}
-
-	return districts, rows.Err()
+	return districts, err
 }
 
 // Get returns the street with the given ID, or ErrNotFound.
 func (st *StreetStore) Get(ctx context.Context, id uuid.UUID) (Street, error) {
 	var s Street
 
-	err := st.db.QueryRowContext(ctx,
-		`SELECT id, city, district, name, country, latitude, longitude FROM streets WHERE id = $1`, id,
-	).Scan(&s.ID, &s.City, &s.District, &s.Name, &s.Country, &s.Latitude, &s.Longitude)
+	err := st.db.WithContext(ctx).Take(&s, "id = ?", id).Error
 
 	return s, notFound(err)
 }
@@ -218,12 +157,7 @@ func (st *StreetStore) Get(ctx context.Context, id uuid.UUID) (Street, error) {
 func (st *StreetStore) Update(ctx context.Context, id uuid.UUID, s Street) (Street, error) {
 	s.ID = id
 
-	err := execUpdate(ctx, st.db,
-		`UPDATE streets SET city=$1, district=$2, name=$3, country=$4, latitude=$5, longitude=$6 WHERE id=$7`,
-		[]any{s.City, s.District, s.Name, s.Country, s.Latitude, s.Longitude, id},
-		isUniqueViolation, ErrStreetAlreadyExists,
-	)
-	if err != nil {
+	if err := updateRow(ctx, st.db, &s, gorm.ErrDuplicatedKey, ErrStreetAlreadyExists); err != nil {
 		return Street{}, err
 	}
 
@@ -233,10 +167,5 @@ func (st *StreetStore) Update(ctx context.Context, id uuid.UUID, s Street) (Stre
 // Delete removes the street with the given ID and, via cascade, its house
 // numbers. It returns ErrNotFound if no such street exists.
 func (st *StreetStore) Delete(ctx context.Context, id uuid.UUID) error {
-	res, err := st.db.ExecContext(ctx, `DELETE FROM streets WHERE id = $1`, id)
-	if err != nil {
-		return err
-	}
-
-	return requireOneRow(res)
+	return requireOneRow(st.db.WithContext(ctx).Delete(&Street{}, "id = ?", id))
 }
