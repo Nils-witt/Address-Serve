@@ -29,3 +29,29 @@ jobs:
         with:
           version: latest
           args: --timeout 5m ./cmd/... ./internal/...
+
+  frontend:
+    name: Lint (frontend)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+
+      - name: Build
+        run: npm run build --prefix frontend
+
+      - name: Lint
+        run: npm run lint --prefix frontend
+
+      - name: Check formatting
+        run: npm run format:check --prefix frontend

@@ -1,0 +1,18 @@
+.streets-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.streets-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.streets-toolbar__select {
+  min-width: 200px;
+}

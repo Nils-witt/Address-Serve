@@ -29,6 +29,8 @@ services:
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE}
       OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_SCOPE: ${OIDC_SCOPE:-}
     ports:
       - "8080:8080"
     depends_on:

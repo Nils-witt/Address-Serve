@@ -15,10 +15,15 @@ type Config struct {
 	// OIDC verifies bearer tokens issued by an OpenID Connect provider.
 	OIDC              *OIDCVerifier
 	CORSAllowedOrigin string
+	// UI serves the embedded web UI under /ui/. Nil disables the UI routes.
+	UI http.Handler
+	// UIConfig is served to the web UI at GET /ui-config.
+	UIConfig UIConfig
 }
 
 // NewHandler returns the root handler serving every API route, wrapped in
-// logging, CORS and auth middleware.
+// logging, CORS and auth middleware. The web UI and its config are the only
+// routes served without auth.
 func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.HouseNumberStore, bulk *store.BulkStore) http.Handler {
 	mux := http.NewServeMux()
 	registerStreetRoutes(mux, streets)
@@ -29,7 +34,14 @@ func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.Hous
 		w.WriteHeader(http.StatusOK)
 	})
 
-	return loggingMiddleware(corsMiddleware(cfg.CORSAllowedOrigin)(authMiddleware(cfg.OIDC)(mux)))
+	root := http.NewServeMux()
+	if cfg.UI != nil {
+		registerUIRoutes(root, cfg.UI, cfg.UIConfig)
+	}
+
+	root.Handle("/", authMiddleware(cfg.OIDC)(mux))
+
+	return loggingMiddleware(corsMiddleware(cfg.CORSAllowedOrigin)(root))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

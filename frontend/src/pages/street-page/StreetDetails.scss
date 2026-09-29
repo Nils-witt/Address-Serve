@@ -1,0 +1,23 @@
+.street-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.street-details__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.street-details__coordinates {
+  font-family: monospace;
+}
+
+.street-details__actions {
+  align-items: center;
+}

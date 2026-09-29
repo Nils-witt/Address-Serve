@@ -1,0 +1,85 @@
+{
+  "common": {
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "actions": "Aktionen",
+    "rowsPerPage": "Zeilen pro Seite",
+    "backToStreets": "Zurück zu den Straßen"
+  },
+  "nav": {
+    "brand": "Address Serve",
+    "streets": "Straßen",
+    "apiDocs": "API-Doku",
+    "account": "Konto",
+    "logout": "Abmelden",
+    "openNavMenu": "Navigationsmenü öffnen"
+  },
+  "auth": {
+    "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an."
+  },
+  "login": {
+    "intro": "Melde dich mit deinem Organisationskonto an, um Straßen und Hausnummern zu verwalten.",
+    "signInWithSso": "Mit SSO anmelden",
+    "signingIn": "Weiterleitung…",
+    "loginFailed": "Anmeldung fehlgeschlagen: {{reason}}",
+    "callbackFailed": "Anmeldung konnte nicht abgeschlossen werden: {{reason}}",
+    "backToLogin": "Zurück zur Anmeldung"
+  },
+  "notFound": {
+    "message": "Seite nicht gefunden."
+  },
+  "confirmDialog": {
+    "defaultTitle": "Bist du sicher?",
+    "cancel": "Abbrechen",
+    "defaultConfirmLabel": "Bestätigen"
+  },
+  "languageSwitcher": {
+    "label": "Sprache",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "fields": {
+    "streetName": "Straße",
+    "city": "Stadt",
+    "district": "Ortsteil",
+    "country": "Land",
+    "latitude": "Breitengrad",
+    "longitude": "Längengrad",
+    "coordinates": "Koordinaten",
+    "number": "Nummer",
+    "numberAddition": "Zusatz",
+    "postcode": "Postleitzahl",
+    "invalidCoordinates": "Gib einen Breitengrad zwischen -90 und 90 und einen Längengrad zwischen -180 und 180 ein."
+  },
+  "streets": {
+    "searchLabel": "Straße suchen",
+    "newStreet": "Neue Straße",
+    "empty": "Keine passenden Straßen.",
+    "deleteTitle": "Straße löschen?",
+    "deleteMessage": "{{name}} in {{city}} mit allen Hausnummern löschen?"
+  },
+  "street": {
+    "notFound": "Straße nicht gefunden."
+  },
+  "streetDialog": {
+    "newTitle": "Neue Straße",
+    "editTitle": "{{name}} bearbeiten"
+  },
+  "houseNumbers": {
+    "title_one": "{{count}} Hausnummer",
+    "title_other": "{{count}} Hausnummern",
+    "newHouseNumber": "Hausnummer hinzufügen",
+    "empty": "Diese Straße hat noch keine Hausnummern.",
+    "deleteTitle": "Hausnummer löschen?",
+    "deleteMessage": "{{street}} {{number}} löschen?"
+  },
+  "houseNumberDialog": {
+    "newTitle": "Neue Hausnummer",
+    "editTitle": "Hausnummer {{number}} bearbeiten",
+    "invalidNumber": "Die Nummer muss eine ganze Zahl ab 1 sein."
+  }
+}

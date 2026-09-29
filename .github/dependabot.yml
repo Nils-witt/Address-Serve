@@ -12,6 +12,18 @@ updates:
       go-minor-patch:
         update-types: [minor, patch]
 
+  # Web UI
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ["dependencies", "javascript"]
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /

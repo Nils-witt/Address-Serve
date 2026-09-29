@@ -2,6 +2,12 @@ version: 2
 
 project_name: address-serv
 
+before:
+  hooks:
+    # The web UI is embedded into the binary (frontend/embed.go).
+    - npm --prefix frontend ci
+    - npm --prefix frontend run build
+
 builds:
   - id: address-serv
     binary: address-serv

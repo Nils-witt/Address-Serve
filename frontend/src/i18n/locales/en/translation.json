@@ -1,0 +1,85 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "actions": "Actions",
+    "rowsPerPage": "Rows per page",
+    "backToStreets": "Back to streets"
+  },
+  "nav": {
+    "brand": "Address Serve",
+    "streets": "Streets",
+    "apiDocs": "API docs",
+    "account": "Account",
+    "logout": "Logout",
+    "openNavMenu": "Open navigation menu"
+  },
+  "auth": {
+    "sessionExpired": "Your session has expired. Please sign in again."
+  },
+  "login": {
+    "intro": "Sign in with your organization account to manage streets and house numbers.",
+    "signInWithSso": "Sign in with SSO",
+    "signingIn": "Redirecting…",
+    "loginFailed": "Sign-in failed: {{reason}}",
+    "callbackFailed": "Sign-in could not be completed: {{reason}}",
+    "backToLogin": "Back to sign-in"
+  },
+  "notFound": {
+    "message": "Page not found."
+  },
+  "confirmDialog": {
+    "defaultTitle": "Are you sure?",
+    "cancel": "Cancel",
+    "defaultConfirmLabel": "Confirm"
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "fields": {
+    "streetName": "Street",
+    "city": "City",
+    "district": "District",
+    "country": "Country",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "coordinates": "Coordinates",
+    "number": "Number",
+    "numberAddition": "Addition",
+    "postcode": "Postcode",
+    "invalidCoordinates": "Enter a latitude between -90 and 90 and a longitude between -180 and 180."
+  },
+  "streets": {
+    "searchLabel": "Search street",
+    "newStreet": "New street",
+    "empty": "No streets match.",
+    "deleteTitle": "Delete street?",
+    "deleteMessage": "Delete {{name}} in {{city}} together with all of its house numbers?"
+  },
+  "street": {
+    "notFound": "Street not found."
+  },
+  "streetDialog": {
+    "newTitle": "New street",
+    "editTitle": "Edit {{name}}"
+  },
+  "houseNumbers": {
+    "title_one": "{{count}} house number",
+    "title_other": "{{count}} house numbers",
+    "newHouseNumber": "Add house number",
+    "empty": "This street has no house numbers yet.",
+    "deleteTitle": "Delete house number?",
+    "deleteMessage": "Delete {{street}} {{number}}?"
+  },
+  "houseNumberDialog": {
+    "newTitle": "New house number",
+    "editTitle": "Edit house number {{number}}",
+    "invalidNumber": "The number must be a whole number of at least 1."
+  }
+}

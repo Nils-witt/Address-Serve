@@ -1,0 +1,13 @@
+.streets-table__row {
+  cursor: pointer;
+}
+
+.streets-table__coordinates {
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.streets-table__empty {
+  padding: 24px;
+  text-align: center;
+}

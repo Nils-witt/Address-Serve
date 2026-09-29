@@ -1,0 +1,22 @@
+.house-numbers-table {
+  padding: 16px 24px 24px;
+}
+
+.house-numbers-table__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.house-numbers-table__coordinates {
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.house-numbers-table__empty {
+  padding: 24px;
+  text-align: center;
+}

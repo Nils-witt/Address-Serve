@@ -12,7 +12,9 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/nils-witt/address-serve/frontend"
 	"github.com/nils-witt/address-serve/internal/api"
+	"github.com/nils-witt/address-serve/internal/api/spa"
 	"github.com/nils-witt/address-serve/internal/store"
 )
 
@@ -51,10 +53,17 @@ func run() error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	ui, err := spa.Handler(frontend.DistFS)
+	if err != nil {
+		return fmt.Errorf("failed to load web UI: %w", err)
+	}
+
 	handler := api.NewHandler(
 		api.Config{
 			OIDC:              oidc,
 			CORSAllowedOrigin: getenvDefault("CORS_ALLOWED_ORIGIN", "*"),
+			UI:                ui,
+			UIConfig:          uiConfig(),
 		},
 		store.NewStreetStore(db),
 		store.NewHouseNumberStore(db),
@@ -94,6 +103,21 @@ func oidcVerifier(ctx context.Context) (*api.OIDCVerifier, error) {
 	}
 
 	return verifier, nil
+}
+
+// uiConfig describes the OIDC client the web UI signs in with. The client ID
+// defaults to OIDC_AUDIENCE, which fits providers where a public client's own
+// ID ends up in the access token's audience.
+func uiConfig() api.UIConfig {
+	return api.UIConfig{
+		OIDC: api.UIOIDCConfig{
+			Issuer:   os.Getenv("OIDC_ISSUER_URL"),
+			ClientID: getenvDefault("OIDC_CLIENT_ID", os.Getenv("OIDC_AUDIENCE")),
+			Scope:    getenvDefault("OIDC_SCOPE", "openid profile email"),
+		},
+		Version: version,
+		Commit:  commit,
+	}
 }
 
 // databaseURL returns DATABASE_URL, or builds a DSN from the POSTGRES_*
