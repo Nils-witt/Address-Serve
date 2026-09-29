@@ -13,6 +13,7 @@ tags:
   - name: streets
   - name: house-numbers
   - name: bulk
+  - name: ui
 
 paths:
   /healthz:
@@ -23,6 +24,22 @@ paths:
       responses:
         "200":
           description: Service is healthy
+
+  /ui-config:
+    get:
+      summary: Web UI configuration
+      description: >-
+        Public (no token required). Tells the web UI served at /ui/ which
+        OpenID Connect client to sign in with, and which build it talks to.
+      operationId: getUIConfig
+      tags: [ui]
+      responses:
+        "200":
+          description: The UI configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UIConfig"
 
   /api/streets:
     get:
@@ -655,6 +672,30 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HouseNumber"
+
+    UIConfig:
+      type: object
+      required: [oidc, version, commit]
+      properties:
+        oidc:
+          type: object
+          required: [issuer, clientId, scope]
+          properties:
+            issuer:
+              type: string
+              example: https://auth.example.com/realms/example
+            clientId:
+              type: string
+              example: address-serv
+            scope:
+              type: string
+              example: openid profile email
+        version:
+          type: string
+          example: v1.2.0
+        commit:
+          type: string
+          example: 39e8906
 
     Error:
       type: object
