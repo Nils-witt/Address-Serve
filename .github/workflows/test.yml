@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: Test (Go ${{ matrix.go }})
@@ -15,8 +19,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Minimum version from go.mod, plus the latest release.
         go:
-          - "1.26"
+          - "1.27"
           - "stable"
 
     steps:
@@ -28,18 +33,16 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Verify dependencies
-        run: |
-          go mod verify
-          go mod download
+        run: go mod verify
 
-      # Scoped to ./cmd/... ./internal/... — the repo root also holds unrelated skill-asset
-      # example code (agent/) that doesn't build as part of this module, so
-      # ./... and `go mod tidy` can't be used here.
+      - name: Check go.mod is tidy
+        run: go mod tidy -diff
+
       - name: Build
-        run: go build -o /dev/null ./cmd/... ./internal/...
+        run: go build -o /dev/null ./...
 
       - name: Run tests
-        run: go test -v -race -shuffle=on -coverprofile=coverage.out ./cmd/... ./internal/...
+        run: go test -race -shuffle=on -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         if: matrix.go == 'stable'

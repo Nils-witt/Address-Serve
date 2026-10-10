@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: Lint
@@ -19,16 +23,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: stable
+          go-version-file: go.mod
 
-      - name: Run go vet
-        run: go vet ./cmd/... ./internal/...
-
+      # go vet runs as part of golangci-lint (govet linter); timeout comes from .golangci.yml.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          args: --timeout 5m ./cmd/... ./internal/...
 
   frontend:
     name: Lint (frontend)
