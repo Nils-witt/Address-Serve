@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { User, UserManager } from 'oidc-client-ts';
+import { ErrorResponse, type User, type UserManager } from 'oidc-client-ts';
 import { Alert, Box } from '@mui/material';
 import { fetchUIConfig } from '../api/ApiClient.ts';
 import { createUserManager, displayName, isUsable } from '../api/oidc.ts';
@@ -13,6 +13,18 @@ import { AuthContext, type AuthState } from './AuthContext.ts';
 interface LoginState {
   from?: string | null;
 }
+
+/** How a renewal ended: a new token is in place, the provider refused (the
+ * session is over), or it failed for a reason that may pass (offline). */
+type Renewal = 'renewed' | 'refused' | 'failed';
+
+/** Background renewal starts this long before the access token expires. */
+const RENEW_BEFORE_EXPIRY_S = 60;
+/** Backoff for failed background renewals: doubles from base up to max. */
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 5 * 60_000;
+/** setTimeout fires immediately for delays past 2^31-1 ms. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 /** Loads the server's OIDC config, then provides the session (see AuthState). */
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -69,7 +81,7 @@ function SessionProvider({
     setUserState(next);
   }, []);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
-  const refreshInFlight = useRef<Promise<boolean> | null>(null);
+  const renewalInFlight = useRef<Promise<Renewal> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,29 +113,26 @@ function SessionProvider({
 
   const getToken = useCallback(() => userRef.current?.access_token ?? null, []);
 
-  const refreshSession = useCallback((): Promise<boolean> => {
-    refreshInFlight.current ??= (async () => {
+  const renew = useCallback((): Promise<Renewal> => {
+    renewalInFlight.current ??= (async (): Promise<Renewal> => {
       const current = await manager.getUser();
-      if (!current?.refresh_token) return false;
+      if (!current?.refresh_token) return 'refused';
       try {
         // With a refresh token this is a plain token request, no iframe.
         const renewed = await manager.signinSilent();
-        return isUsable(renewed);
-      } catch {
-        return false;
+        return isUsable(renewed) ? 'renewed' : 'refused';
+      } catch (err) {
+        // An error answer from the provider (e.g. invalid_grant) means the
+        // refresh token is no good; anything else (offline, timeout) may pass.
+        return err instanceof ErrorResponse ? 'refused' : 'failed';
       }
     })().finally(() => {
-      refreshInFlight.current = null;
+      renewalInFlight.current = null;
     });
-    return refreshInFlight.current;
+    return renewalInFlight.current;
   }, [manager]);
 
-  // Renew shortly before the access token expires, so requests rarely hit a 401.
-  useEffect(() => {
-    const onExpiring = () => void refreshSession();
-    manager.events.addAccessTokenExpiring(onExpiring);
-    return () => manager.events.removeAccessTokenExpiring(onExpiring);
-  }, [manager, refreshSession]);
+  const refreshSession = useCallback(async () => (await renew()) === 'renewed', [renew]);
 
   const expireSession = useCallback(() => {
     // Late failures of requests from a session that already ended must not
@@ -132,6 +141,54 @@ function SessionProvider({
     void endSession();
     setSessionMessage(t('auth.sessionExpired'));
   }, [endSession, t]);
+
+  // Background refresh: renew shortly before the access token expires, so
+  // requests rarely hit a 401 and an idle tab keeps its session. Failed
+  // attempts are retried with backoff until the provider refuses. Timers
+  // stall while the device sleeps, so waking up or coming back online
+  // re-checks right away. A renewal loads a new user, which reschedules.
+  useEffect(() => {
+    const expiresAt = user?.expires_at;
+    if (!user?.refresh_token || expiresAt === undefined) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
+    let stopped = false;
+
+    const untilDue = () => Math.max(0, (expiresAt - RENEW_BEFORE_EXPIRY_S) * 1000 - Date.now());
+    const schedule = (ms: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void run(), Math.min(ms, MAX_TIMEOUT_MS));
+    };
+    const run = async () => {
+      if (untilDue() > 0 && failures === 0) {
+        // A clamped or early wake-up: not due yet.
+        schedule(untilDue());
+        return;
+      }
+      const result = await renew();
+      if (stopped || result === 'renewed') return;
+      if (result === 'refused') {
+        expireSession();
+        return;
+      }
+      failures++;
+      schedule(Math.min(RETRY_BASE_MS * 2 ** (failures - 1), RETRY_MAX_MS));
+    };
+    const onWake = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (failures > 0 || untilDue() === 0) schedule(0);
+    };
+
+    schedule(untilDue());
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('online', onWake);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('online', onWake);
+    };
+  }, [user, renew, expireSession]);
 
   const login = useCallback(
     async (from?: string | null) => {
