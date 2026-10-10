@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -10,13 +11,30 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+
+	"github.com/nils-witt/address-serve/internal/store"
 )
 
+// fakeAPITokens authenticates the secrets it holds as keys.
+type fakeAPITokens map[string]store.APIToken
+
+func (f fakeAPITokens) Authenticate(_ context.Context, secret string) (store.APIToken, error) {
+	t, ok := f[secret]
+	if !ok {
+		return store.APIToken{}, store.ErrInvalidAPIToken
+	}
+
+	return t, nil
+}
+
 const (
+	testAPIToken = store.APITokenPrefix + "test-secret"
 	testAudience = "address-serv"
 	testKID      = "test-key"
 	testSubject  = "user-1"
@@ -74,9 +92,11 @@ func TestAuthMiddleware(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := authMiddleware(oidc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := r.Context().Value(claimsContextKey).(jwt.MapClaims)
-		writeJSON(w, http.StatusOK, map[string]any{subClaim: claims[subClaim]})
+	tokens := fakeAPITokens{testAPIToken: {ID: uuid.New(), OwnerSub: testSubject, OwnerName: "User One"}}
+
+	handler := authMiddleware(oidc, tokens)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, _ := principalFrom(r.Context())
+		writeJSON(w, http.StatusOK, map[string]any{subClaim: p.Subject})
 	}))
 
 	validClaims := func() jwt.MapClaims {
@@ -137,6 +157,8 @@ func TestAuthMiddleware(t *testing.T) {
 		{"hmac shared secret", signHMAC([]byte("test-secret"), validClaims()), http.StatusUnauthorized},
 		{"hmac signed with public key", signHMAC(pubPEM, validClaims()), http.StatusUnauthorized},
 		{"garbage", "not-a-jwt", http.StatusUnauthorized},
+		{"api token valid", testAPIToken, http.StatusOK},
+		{"api token unknown", store.APITokenPrefix + "unknown", http.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {
@@ -180,5 +202,74 @@ func TestNewOIDCVerifierIssuerMismatch(t *testing.T) {
 	_, err = NewOIDCVerifier(t.Context(), OIDCConfig{IssuerURL: provider.URL + "/", Audience: testAudience})
 	if err == nil {
 		t.Fatal("expected issuer mismatch error")
+	}
+}
+
+func TestRequireTokenOwner(t *testing.T) {
+	t.Parallel()
+
+	tokenID := uuid.New()
+
+	tests := []struct {
+		name      string
+		principal *principal
+		want      int
+	}{
+		{"oidc user", &principal{Subject: testSubject}, http.StatusOK},
+		{"api token", &principal{Subject: testSubject, APITokenID: &tokenID}, http.StatusForbidden},
+		{"oidc without subject", &principal{}, http.StatusForbidden},
+		{"unauthenticated", nil, http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			if tt.principal != nil {
+				ctx = context.WithValue(ctx, principalContextKey, *tt.principal)
+			}
+
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/tokens", nil)
+			rec := httptest.NewRecorder()
+
+			if _, ok := requireTokenOwner(rec, req); ok {
+				rec.WriteHeader(http.StatusOK)
+			}
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.want)
+			}
+		})
+	}
+}
+
+func TestCreateAPITokenRequestValidate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	past := now.Add(-time.Hour)
+	future := now.Add(time.Hour)
+
+	tests := []struct {
+		name    string
+		req     createAPITokenRequest
+		wantErr bool
+	}{
+		{"name only", createAPITokenRequest{Name: " ci "}, false},
+		{"future expiry", createAPITokenRequest{Name: "ci", ExpiresAt: &future}, false},
+		{"blank name", createAPITokenRequest{Name: "  "}, true},
+		{"long name", createAPITokenRequest{Name: strings.Repeat("x", maxAPITokenNameLen+1)}, true},
+		{"past expiry", createAPITokenRequest{Name: "ci", ExpiresAt: &past}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tt.req.validate(now); (err != nil) != tt.wantErr {
+				t.Fatalf("validate() = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

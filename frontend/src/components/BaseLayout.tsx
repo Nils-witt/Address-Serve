@@ -142,6 +142,9 @@ export default function BaseLayout() {
                 open={Boolean(anchorElUser)}
                 onClose={handleCloseUserMenu}
               >
+                <MenuItem component={Link} to={ROUTES.apiTokens} onClick={handleCloseUserMenu}>
+                  {t('nav.apiTokens')}
+                </MenuItem>
                 <MenuItem onClick={handleLogout}>{t('nav.logout')}</MenuItem>
               </Menu>
             </Box>

@@ -1,4 +1,4 @@
-// Package store persists streets and house numbers in PostgreSQL.
+// Package store persists streets, house numbers and API tokens in PostgreSQL.
 package store
 
 import (

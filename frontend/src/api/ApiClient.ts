@@ -9,6 +9,9 @@
 // AuthProvider; the client only reads it through the options below.
 
 import type {
+  APIToken,
+  APITokenInput,
+  CreatedAPIToken,
   District,
   HouseNumber,
   HouseNumberInput,
@@ -179,5 +182,20 @@ export class ApiClient {
 
   deleteHouseNumber(id: string): Promise<void> {
     return this.del(`/api/house-numbers/${encodeURIComponent(id)}`);
+  }
+
+  // ---- API tokens --------------------------------------------------------
+
+  listAPITokens(): Promise<APIToken[]> {
+    return this.getJson('/api/tokens');
+  }
+
+  /** The returned secret can't be fetched again. */
+  createAPIToken(input: APITokenInput): Promise<CreatedAPIToken> {
+    return this.sendJsonForJson('/api/tokens', 'POST', input);
+  }
+
+  deleteAPIToken(id: string): Promise<void> {
+    return this.del(`/api/tokens/${encodeURIComponent(id)}`);
   }
 }

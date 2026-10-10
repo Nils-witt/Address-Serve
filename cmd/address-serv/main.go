@@ -68,6 +68,7 @@ func run() error {
 		store.NewStreetStore(db),
 		store.NewHouseNumberStore(db),
 		store.NewBulkStore(db),
+		store.NewAPITokenStore(db),
 	)
 
 	addr := getenvDefault("LISTEN_ADDR", ":8080")

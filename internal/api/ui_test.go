@@ -23,7 +23,7 @@ func TestUIRoutesBypassAuth(t *testing.T) {
 
 	// A nil verifier is never reached: every request here either bypasses
 	// auth or is rejected for its missing Authorization header first.
-	handler := NewHandler(Config{UI: ui, UIConfig: cfg, CORSAllowedOrigin: "*"}, nil, nil, nil)
+	handler := NewHandler(Config{UI: ui, UIConfig: cfg, CORSAllowedOrigin: "*"}, nil, nil, nil, nil)
 
 	tests := []struct {
 		name     string

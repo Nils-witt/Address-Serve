@@ -1,0 +1,26 @@
+.api-tokens-table {
+  padding: 16px 24px 24px;
+}
+
+.api-tokens-table__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.api-tokens-table__prefix {
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.api-tokens-table__expired {
+  margin-left: 8px;
+}
+
+.api-tokens-table__empty {
+  padding: 24px;
+  text-align: center;
+}

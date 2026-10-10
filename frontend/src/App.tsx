@@ -19,6 +19,7 @@ import { ROUTES, ROUTE_SEGMENTS } from './routes.ts';
 // Route-level components are code-split so the login page loads without them.
 const StreetsPage = lazy(() => import('./pages/StreetsPage.tsx'));
 const StreetPage = lazy(() => import('./pages/StreetPage.tsx'));
+const APITokensPage = lazy(() => import('./pages/APITokensPage.tsx'));
 
 export default function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)', { noSsr: true });
@@ -51,6 +52,7 @@ export default function App() {
                             <Route index element={<StreetsPage />} />
                             <Route path=":streetId" element={<StreetPage />} />
                           </Route>
+                          <Route path={ROUTE_SEGMENTS.apiTokens} element={<APITokensPage />} />
                           <Route path="*" element={<NotFoundPage />} />
                         </Route>
                       </Route>

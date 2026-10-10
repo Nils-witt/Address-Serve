@@ -15,6 +15,7 @@
     "streets": "Streets",
     "apiDocs": "API docs",
     "account": "Account",
+    "apiTokens": "API tokens",
     "logout": "Logout",
     "openNavMenu": "Open navigation menu"
   },
@@ -81,5 +82,33 @@
     "newTitle": "New house number",
     "editTitle": "Edit house number {{number}}",
     "invalidNumber": "The number must be a whole number of at least 1."
+  },
+  "apiTokens": {
+    "title": "API tokens",
+    "intro": "Tokens let scripts and other programs call the API on your behalf. Send one as \"Authorization: Bearer <token>\".",
+    "newToken": "New token",
+    "newTitle": "New API token",
+    "createdTitle": "Token created",
+    "name": "Name",
+    "nameHelp": "What the token is for, e.g. \"import script\".",
+    "token": "Token",
+    "created": "Created",
+    "expires": "Expires",
+    "expiry": "Expiration",
+    "expiryDays_one": "{{count}} day",
+    "expiryDays_other": "{{count}} days",
+    "never": "Never",
+    "expired": "Expired",
+    "lastUsed": "Last used",
+    "neverUsed": "Never",
+    "empty": "You have no API tokens yet.",
+    "copyNow": "Copy the token now. It won't be shown again.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Copying failed. Select the token and copy it manually.",
+    "done": "Done",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke token?",
+    "revokeMessage": "Revoke the token \"{{name}}\"? Programs using it will lose access immediately."
   }
 }

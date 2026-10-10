@@ -8,6 +8,7 @@ export const queryKeys = {
   cities: ['cities'] as const,
   districts: (city: string) => ['districts', city] as const,
   houseNumbers: (streetId: string) => ['house-numbers', streetId] as const,
+  apiTokens: ['api-tokens'] as const,
 
   // Prefixes covering many keys at once, for invalidating a whole family
   // after a mutation.
@@ -15,5 +16,6 @@ export const queryKeys = {
     // A street change can add or remove a city or district, too.
     streets: [['streets'], ['cities'], ['districts']] as const,
     houseNumbers: [['house-numbers']] as const,
+    apiTokens: [['api-tokens']] as const,
   },
 };

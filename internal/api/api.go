@@ -12,7 +12,8 @@ import (
 
 // Config holds the settings NewHandler needs besides the stores.
 type Config struct {
-	// OIDC verifies bearer tokens issued by an OpenID Connect provider.
+	// OIDC verifies bearer tokens issued by an OpenID Connect provider. API
+	// tokens are checked against the APITokenStore passed to NewHandler.
 	OIDC              *OIDCVerifier
 	CORSAllowedOrigin string
 	// UI serves the embedded web UI under /ui/. Nil disables the UI routes.
@@ -24,11 +25,12 @@ type Config struct {
 // NewHandler returns the root handler serving every API route, wrapped in
 // logging, CORS and auth middleware. The web UI and its config are the only
 // routes served without auth.
-func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.HouseNumberStore, bulk *store.BulkStore) http.Handler {
+func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.HouseNumberStore, bulk *store.BulkStore, tokens *store.APITokenStore) http.Handler {
 	mux := http.NewServeMux()
 	registerStreetRoutes(mux, streets)
 	registerHouseNumberRoutes(mux, houseNumbers)
 	registerBulkRoutes(mux, bulk)
+	registerAPITokenRoutes(mux, tokens)
 	registerDocsRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -39,7 +41,14 @@ func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.Hous
 		registerUIRoutes(root, cfg.UI, cfg.UIConfig)
 	}
 
-	root.Handle("/", authMiddleware(cfg.OIDC)(mux))
+	// A nil *APITokenStore must become a nil interface, not a non-nil one
+	// wrapping a nil pointer.
+	var tokenAuth apiTokenAuthenticator
+	if tokens != nil {
+		tokenAuth = tokens
+	}
+
+	root.Handle("/", authMiddleware(cfg.OIDC, tokenAuth)(mux))
 
 	return loggingMiddleware(corsMiddleware(cfg.CORSAllowedOrigin)(root))
 }

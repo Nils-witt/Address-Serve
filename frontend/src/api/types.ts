@@ -38,6 +38,28 @@ export interface HouseNumber extends HouseNumberInput {
   id: string;
 }
 
+export interface APITokenInput {
+  name: string;
+  /** RFC 3339; null for a token that never expires. */
+  expiresAt: string | null;
+}
+
+export interface APIToken {
+  id: string;
+  name: string;
+  /** The first characters of the secret, to tell tokens apart. */
+  prefix: string;
+  createdAt: string;
+  expiresAt: string | null;
+  /** Approximate: recorded at most once a minute. */
+  lastUsedAt: string | null;
+}
+
+/** POST /api/tokens: the only response that carries the secret. */
+export interface CreatedAPIToken extends APIToken {
+  token: string;
+}
+
 /** GET /ui-config: served before sign-in. */
 export interface UIConfig {
   oidc: {

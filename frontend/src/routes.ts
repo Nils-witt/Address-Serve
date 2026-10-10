@@ -6,6 +6,7 @@ export const ROUTE_SEGMENTS = {
   login: 'login',
   callback: 'callback',
   streets: 'streets',
+  apiTokens: 'api-tokens',
 } as const;
 
 const BASE = `/${ROUTE_SEGMENTS.base}`;
@@ -15,5 +16,6 @@ export const ROUTES = {
   login: `${BASE}/${ROUTE_SEGMENTS.login}`,
   callback: `${BASE}/${ROUTE_SEGMENTS.callback}`,
   streets: `${BASE}/${ROUTE_SEGMENTS.streets}`,
+  apiTokens: `${BASE}/${ROUTE_SEGMENTS.apiTokens}`,
   street: (streetId: string) => `${BASE}/${ROUTE_SEGMENTS.streets}/${streetId}`,
 } as const;

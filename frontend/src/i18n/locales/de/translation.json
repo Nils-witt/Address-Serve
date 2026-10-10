@@ -15,6 +15,7 @@
     "streets": "Straßen",
     "apiDocs": "API-Doku",
     "account": "Konto",
+    "apiTokens": "API-Tokens",
     "logout": "Abmelden",
     "openNavMenu": "Navigationsmenü öffnen"
   },
@@ -81,5 +82,33 @@
     "newTitle": "Neue Hausnummer",
     "editTitle": "Hausnummer {{number}} bearbeiten",
     "invalidNumber": "Die Nummer muss eine ganze Zahl ab 1 sein."
+  },
+  "apiTokens": {
+    "title": "API-Tokens",
+    "intro": "Mit Tokens können Skripte und andere Programme die API in deinem Namen aufrufen. Sende einen als \"Authorization: Bearer <token>\".",
+    "newToken": "Neuer Token",
+    "newTitle": "Neuer API-Token",
+    "createdTitle": "Token erstellt",
+    "name": "Name",
+    "nameHelp": "Wofür der Token ist, z. B. \"Import-Skript\".",
+    "token": "Token",
+    "created": "Erstellt",
+    "expires": "Läuft ab",
+    "expiry": "Ablauf",
+    "expiryDays_one": "{{count}} Tag",
+    "expiryDays_other": "{{count}} Tage",
+    "never": "Nie",
+    "expired": "Abgelaufen",
+    "lastUsed": "Zuletzt benutzt",
+    "neverUsed": "Nie",
+    "empty": "Du hast noch keine API-Tokens.",
+    "copyNow": "Kopiere den Token jetzt. Er wird nicht noch einmal angezeigt.",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen. Markiere den Token und kopiere ihn manuell.",
+    "done": "Fertig",
+    "revoke": "Widerrufen",
+    "revokeTitle": "Token widerrufen?",
+    "revokeMessage": "Den Token \"{{name}}\" widerrufen? Programme, die ihn nutzen, verlieren sofort den Zugriff."
   }
 }
