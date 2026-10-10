@@ -17,17 +17,18 @@ func TestHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		fs       fstest.MapFS
-		path     string
-		wantCode int
-		wantBody string
+		name      string
+		fs        fstest.MapFS
+		path      string
+		wantCode  int
+		wantBody  string
+		wantCache string
 	}{
-		{"root serves index", built, "/", http.StatusOK, "<html>app</html>"},
-		{"asset served as file", built, "/assets/app-1234.js", http.StatusOK, "console.log(1)"},
-		{"client route falls back to index", built, "/streets/abc", http.StatusOK, "<html>app</html>"},
-		{"directory falls back to index", built, "/assets/", http.StatusOK, "<html>app</html>"},
-		{"unbuilt UI explains itself", fstest.MapFS{"dist/.gitkeep": {}}, "/", http.StatusServiceUnavailable, "has not been built"},
+		{"root serves index", built, "/", http.StatusOK, "<html>app</html>", ""},
+		{"asset served as file", built, "/assets/app-1234.js", http.StatusOK, "console.log(1)", "public, max-age=31536000, immutable"},
+		{"client route falls back to index", built, "/streets/abc", http.StatusOK, "<html>app</html>", ""},
+		{"directory falls back to index", built, "/assets/", http.StatusOK, "<html>app</html>", ""},
+		{"unbuilt UI explains itself", fstest.MapFS{"dist/.gitkeep": {}}, "/", http.StatusServiceUnavailable, "has not been built", ""},
 	}
 
 	for _, tt := range tests {
@@ -48,6 +49,10 @@ func TestHandler(t *testing.T) {
 
 			if !strings.Contains(rec.Body.String(), tt.wantBody) {
 				t.Errorf("body = %q, want it to contain %q", rec.Body.String(), tt.wantBody)
+			}
+
+			if got := rec.Header().Get("Cache-Control"); got != tt.wantCache {
+				t.Errorf("Cache-Control = %q, want %q", got, tt.wantCache)
 			}
 		})
 	}

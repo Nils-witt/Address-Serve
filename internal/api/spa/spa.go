@@ -41,7 +41,17 @@ func Handler(distFS fs.FS) (http.Handler, error) {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requestedFileExists(sub, r.URL.Path) {
+			// Vite names everything under assets/ by content hash, so a
+			// changed file always gets a new URL and browsers may keep these
+			// forever. Without this header they would re-download every
+			// bundle on each visit: embed.FS has no mod times, so the file
+			// server sends no Last-Modified to revalidate against.
+			if strings.HasPrefix(r.URL.Path, "/assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+
 			fileServer.ServeHTTP(w, r)
+
 			return
 		}
 
