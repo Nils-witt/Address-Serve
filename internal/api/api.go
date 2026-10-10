@@ -23,20 +23,21 @@ type Config struct {
 }
 
 // NewHandler returns the root handler serving every API route, wrapped in
-// logging, CORS and auth middleware. The web UI and its config are the only
-// routes served without auth.
+// logging, CORS and auth middleware. The web UI, its config and the API docs
+// are the only routes served without auth.
 func NewHandler(cfg Config, streets *store.StreetStore, houseNumbers *store.HouseNumberStore, bulk *store.BulkStore, tokens *store.APITokenStore) http.Handler {
 	mux := http.NewServeMux()
 	registerStreetRoutes(mux, streets)
 	registerHouseNumberRoutes(mux, houseNumbers)
 	registerBulkRoutes(mux, bulk)
 	registerAPITokenRoutes(mux, tokens)
-	registerDocsRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	root := http.NewServeMux()
+	registerDocsRoutes(root)
+
 	if cfg.UI != nil {
 		registerUIRoutes(root, cfg.UI, cfg.UIConfig)
 	}

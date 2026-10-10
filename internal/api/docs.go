@@ -29,6 +29,8 @@ const docsPageHTML = `<!doctype html>
 </body>
 </html>`
 
+// registerDocsRoutes serves Swagger UI and the OpenAPI spec on mux, which is
+// served without the auth middleware so the docs are publicly readable.
 func registerDocsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

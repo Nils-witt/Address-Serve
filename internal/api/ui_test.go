@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// TestUIRoutesBypassAuth checks that the web UI and its config load without a
-// token (the user can't have one before signing in), while the API still
-// requires one.
+// TestUIRoutesBypassAuth checks that the web UI, its config and the API docs
+// load without a token (the user can't have one before signing in), while the
+// API still requires one.
 func TestUIRoutesBypassAuth(t *testing.T) {
 	t.Parallel()
 
@@ -34,6 +34,8 @@ func TestUIRoutesBypassAuth(t *testing.T) {
 		{"ui index", "/ui/", http.StatusOK, "/"},
 		{"ui deep link", "/ui/streets/abc", http.StatusOK, "/streets/abc"},
 		{"root redirects to ui", "/", http.StatusFound, ""},
+		{"docs page", "/docs", http.StatusOK, ""},
+		{"openapi spec", "/docs/openapi.yaml", http.StatusOK, ""},
 		{"api requires token", "/api/streets", http.StatusUnauthorized, ""},
 	}
 
