@@ -1,30 +1,72 @@
 openapi: 3.0.3
 info:
   title: address-serv API
-  description: API for managing Street and HouseNumber entities.
+  description: >-
+    API for managing Street and HouseNumber entities. Every endpoint requires
+    a bearer token except the API docs (/docs) and the web UI configuration
+    (/ui-config).
   version: 1.0.0
 
 servers:
   - url: http://localhost:8080
 
-security: []
+security:
+  - bearerAuth: []
 
 tags:
+  - name: health
   - name: streets
   - name: house-numbers
   - name: bulk
   - name: api-tokens
   - name: ui
+  - name: docs
 
 paths:
   /healthz:
     get:
       summary: Health check
       operationId: healthCheck
-      tags: [streets]
+      tags: [health]
       responses:
         "200":
           description: Service is healthy
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /docs:
+    get:
+      summary: API documentation (Swagger UI)
+      description: Public (no token required).
+      operationId: getDocs
+      tags: [docs]
+      security: []
+      responses:
+        "200":
+          description: Swagger UI page rendering this spec
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /docs/openapi.yaml:
+    get:
+      summary: OpenAPI specification
+      description: Public (no token required).
+      operationId: getOpenAPISpec
+      tags: [docs]
+      security: []
+      responses:
+        "200":
+          description: This OpenAPI document
+          content:
+            application/yaml:
+              schema:
+                type: string
 
   /ui-config:
     get:
@@ -34,6 +76,7 @@ paths:
         OpenID Connect client to sign in with, and which build it talks to.
       operationId: getUIConfig
       tags: [ui]
+      security: []
       responses:
         "200":
           description: The UI configuration
@@ -82,12 +125,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Street"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a street
       operationId: createStreet
       tags: [streets]
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -143,6 +190,12 @@ paths:
                 items:
                   type: string
                 example: [Bonn, Berlin]
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/districts:
     get:
@@ -172,6 +225,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/District"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/streets/{id}:
     parameters:
@@ -200,6 +259,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Street not found
           content:
@@ -211,8 +276,6 @@ paths:
       summary: Update a street
       operationId: updateStreet
       tags: [streets]
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -255,8 +318,6 @@ paths:
       summary: Delete a street
       operationId: deleteStreet
       tags: [streets]
-      security:
-        - bearerAuth: []
       responses:
         "204":
           description: Street deleted
@@ -289,8 +350,6 @@ paths:
         nothing in the request is persisted.
       operationId: bulkCreate
       tags: [bulk]
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -363,12 +422,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a house number
       operationId: createHouseNumber
       tags: [house-numbers]
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -422,6 +485,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: House number not found
           content:
@@ -433,8 +502,6 @@ paths:
       summary: Update a house number
       operationId: updateHouseNumber
       tags: [house-numbers]
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -471,8 +538,6 @@ paths:
       summary: Delete a house number
       operationId: deleteHouseNumber
       tags: [house-numbers]
-      security:
-        - bearerAuth: []
       responses:
         "204":
           description: House number deleted
@@ -504,8 +569,6 @@ paths:
         token; API tokens can't manage API tokens.
       operationId: listAPITokens
       tags: [api-tokens]
-      security:
-        - bearerAuth: []
       responses:
         "200":
           description: The user's API tokens
@@ -536,8 +599,6 @@ paths:
         can't manage API tokens.
       operationId: createAPIToken
       tags: [api-tokens]
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -583,8 +644,6 @@ paths:
       description: Deletes one of the signed-in user's API tokens; it stops working immediately.
       operationId: deleteAPIToken
       tags: [api-tokens]
-      security:
-        - bearerAuth: []
       responses:
         "204":
           description: Token revoked
@@ -627,6 +686,7 @@ components:
   schemas:
     District:
       type: object
+      required: [name, city]
       properties:
         name:
           type: string
@@ -784,6 +844,7 @@ components:
 
     BulkResult:
       type: object
+      required: [street, houseNumbers]
       properties:
         street:
           $ref: "#/components/schemas/Street"
@@ -873,6 +934,7 @@ components:
 
     Error:
       type: object
+      required: [error]
       properties:
         error:
           type: string
