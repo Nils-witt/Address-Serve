@@ -15,7 +15,7 @@ import { useStreet } from '../hooks/useStreets';
 import { errorMessage } from '../lib/errors';
 import { compareHouseNumbers, formatHouseNumber } from '../lib/format';
 import { ROUTES } from '../routes';
-import HouseNumberDialog from './street-page/HouseNumberDialog';
+import HouseNumberDialog from '../features/house-numbers/HouseNumberDialog';
 import HouseNumbersTable from './street-page/HouseNumbersTable';
 import StreetDetails from './street-page/StreetDetails';
 import './StreetPage.scss';

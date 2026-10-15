@@ -68,26 +68,65 @@ func (st *HouseNumberStore) Create(ctx context.Context, h HouseNumber) (HouseNum
 	return h, err
 }
 
-// HouseNumberFilter narrows List results. Nil fields are ignored.
+// HouseNumberFilter narrows List results. Nil and empty fields are ignored.
+// Postcode matches as a prefix and StreetName as a substring; City, District
+// and Country match in full. All string fields match case-insensitively, and
+// those other than Postcode filter by the house number's street.
 type HouseNumberFilter struct {
-	StreetID *uuid.UUID
-	Number   *int
+	StreetID   *uuid.UUID
+	Number     *int
+	Postcode   string
+	StreetName string
+	City       string
+	District   string
+	Country    string
+}
+
+// hasStreetFields reports whether f filters on columns of the streets table.
+func (f HouseNumberFilter) hasStreetFields() bool {
+	return f.StreetName != "" || f.City != "" || f.District != "" || f.Country != ""
 }
 
 // List returns the house numbers matching filter, ordered by ID.
 func (st *HouseNumberStore) List(ctx context.Context, filter HouseNumberFilter) ([]HouseNumber, error) {
-	query := st.db.WithContext(ctx)
+	// Columns are qualified because the streets join below also has id
+	// columns.
+	query := st.db.WithContext(ctx).Model(&HouseNumber{}).Select("house_numbers.*")
 
 	if filter.StreetID != nil {
-		query = query.Where("street_id = ?", *filter.StreetID)
+		query = query.Where("house_numbers.street_id = ?", *filter.StreetID)
 	}
 
 	if filter.Number != nil {
-		query = query.Where("number = ?", *filter.Number)
+		query = query.Where("house_numbers.number = ?", *filter.Number)
+	}
+
+	if filter.Postcode != "" {
+		query = query.Where("house_numbers.postcode ILIKE ?", filter.Postcode+"%")
+	}
+
+	if filter.hasStreetFields() {
+		query = query.Joins("JOIN streets ON streets.id = house_numbers.street_id")
+	}
+
+	if filter.StreetName != "" {
+		query = query.Where("streets.name ILIKE ?", "%"+filter.StreetName+"%")
+	}
+
+	if filter.City != "" {
+		query = query.Where("streets.city ILIKE ?", filter.City)
+	}
+
+	if filter.District != "" {
+		query = query.Where("streets.district ILIKE ?", filter.District)
+	}
+
+	if filter.Country != "" {
+		query = query.Where("streets.country ILIKE ?", filter.Country)
 	}
 
 	houseNumbers := []HouseNumber{}
-	err := query.Order("id").Find(&houseNumbers).Error
+	err := query.Order("house_numbers.id").Find(&houseNumbers).Error
 
 	return houseNumbers, err
 }

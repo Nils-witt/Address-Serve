@@ -26,7 +26,10 @@ export default function BaseLayout() {
   const [anchorElNav, setAnchorElNav] = useState<null | HTMLElement>(null);
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
 
-  const tabs: { to: string; label: string }[] = [{ to: ROUTES.streets, label: t('nav.streets') }];
+  const tabs: { to: string; label: string }[] = [
+    { to: ROUTES.streets, label: t('nav.streets') },
+    { to: ROUTES.houseNumbers, label: t('nav.houseNumbers') },
+  ];
 
   const handleOpenNavMenu = (event: MouseEvent<HTMLElement>) => {
     setAnchorElNav(event.currentTarget);

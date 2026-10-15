@@ -38,6 +38,19 @@ export interface HouseNumber extends HouseNumberInput {
   id: string;
 }
 
+export interface HouseNumberFilter {
+  streetId?: string;
+  /** Exact number, without addition. */
+  number?: string;
+  /** Postcode prefix. */
+  postcode?: string;
+  /** Substring of the street name. */
+  street?: string;
+  city?: string;
+  district?: string;
+  country?: string;
+}
+
 export interface APITokenInput {
   name: string;
   /** RFC 3339; null for a token that never expires. */

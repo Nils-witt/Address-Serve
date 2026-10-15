@@ -13,6 +13,7 @@
   "nav": {
     "brand": "Address Serve",
     "streets": "Straßen",
+    "houseNumbers": "Hausnummern",
     "apiDocs": "API-Doku",
     "account": "Konto",
     "apiTokens": "API-Tokens",
@@ -75,6 +76,7 @@
     "title_other": "{{count}} Hausnummern",
     "newHouseNumber": "Hausnummer hinzufügen",
     "empty": "Diese Straße hat noch keine Hausnummern.",
+    "emptyList": "Keine passenden Hausnummern.",
     "deleteTitle": "Hausnummer löschen?",
     "deleteMessage": "{{street}} {{number}} löschen?"
   },

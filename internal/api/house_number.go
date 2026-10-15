@@ -52,7 +52,13 @@ func handleListHouseNumbers(houseNumbers *store.HouseNumberStore) http.HandlerFu
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 
-		var filter store.HouseNumberFilter
+		filter := store.HouseNumberFilter{
+			Postcode:   query.Get("postcode"),
+			StreetName: query.Get("street"),
+			City:       query.Get("city"),
+			District:   query.Get("district"),
+			Country:    query.Get("country"),
+		}
 
 		if v := query.Get("streetId"); v != "" {
 			id, err := uuid.Parse(v)

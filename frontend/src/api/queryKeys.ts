@@ -1,4 +1,4 @@
-import type { StreetFilter } from './types';
+import type { HouseNumberFilter, StreetFilter } from './types';
 
 // Every query key in one place, so what is cached (and cleared on logout) is
 // visible at a glance and two hooks can't collide on a key by accident.
@@ -8,6 +8,7 @@ export const queryKeys = {
   cities: ['cities'] as const,
   districts: (city: string) => ['districts', city] as const,
   houseNumbers: (streetId: string) => ['house-numbers', streetId] as const,
+  allHouseNumbers: (filter: HouseNumberFilter) => ['house-numbers', 'list', filter] as const,
   apiTokens: ['api-tokens'] as const,
 
   // Prefixes covering many keys at once, for invalidating a whole family

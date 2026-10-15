@@ -390,7 +390,11 @@ paths:
   /api/house-numbers:
     get:
       summary: List house numbers
-      description: Optionally filter by street and/or number.
+      description: >-
+        Optionally filter by street, number, postcode, street name, city,
+        district and/or country. Filters combine with AND. postcode matches
+        as a prefix and street as a substring; city, district and country
+        match exactly. All text filters are case-insensitive.
       operationId: listHouseNumbers
       tags: [house-numbers]
       parameters:
@@ -407,6 +411,36 @@ paths:
           schema:
             type: integer
           description: Filter house numbers with this exact number
+        - name: postcode
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter house numbers whose postcode starts with this prefix (case-insensitive)
+        - name: street
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter house numbers whose street name contains this substring (case-insensitive)
+        - name: city
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter house numbers on streets in this exact city (case-insensitive)
+        - name: district
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter house numbers on streets in this exact district (case-insensitive)
+        - name: country
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter house numbers on streets in this exact country (case-insensitive)
       responses:
         "200":
           description: A list of house numbers

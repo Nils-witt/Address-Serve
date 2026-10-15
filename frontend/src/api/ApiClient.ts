@@ -14,6 +14,7 @@ import type {
   CreatedAPIToken,
   District,
   HouseNumber,
+  HouseNumberFilter,
   HouseNumberInput,
   Street,
   StreetFilter,
@@ -168,8 +169,8 @@ export class ApiClient {
 
   // ---- house numbers -----------------------------------------------------
 
-  listHouseNumbers(streetId: string): Promise<HouseNumber[]> {
-    return this.getJson(withQuery('/api/house-numbers', { streetId }));
+  listHouseNumbers(filter: HouseNumberFilter = {}): Promise<HouseNumber[]> {
+    return this.getJson(withQuery('/api/house-numbers', { ...filter }));
   }
 
   createHouseNumber(input: HouseNumberInput): Promise<HouseNumber> {
