@@ -11,6 +11,8 @@ type UIConfig struct {
 	OIDC    UIOIDCConfig `json:"oidc"`
 	Version string       `json:"version"`
 	Commit  string       `json:"commit"`
+	// Branch is the git branch the build was made from; empty when unknown.
+	Branch string `json:"branch"`
 }
 
 // UIOIDCConfig describes the public OIDC client the browser signs in with

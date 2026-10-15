@@ -28,6 +28,7 @@ builds:
       - -s -w
       - -X main.version={{ .Version }}
       - -X main.commit={{ .Commit }}
+      - -X main.branch={{ .Branch }}
 
 archives:
   - formats: [binary]

@@ -19,6 +19,8 @@ func TestUIRoutesBypassAuth(t *testing.T) {
 	cfg := UIConfig{
 		OIDC:    UIOIDCConfig{Issuer: "https://issuer.example", ClientID: testAudience, Scope: "openid"},
 		Version: "v1.2.3",
+		Commit:  "39e8906",
+		Branch:  "main",
 	}
 
 	// A nil verifier is never reached: every request here either bypasses

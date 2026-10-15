@@ -56,5 +56,10 @@ jobs:
           sbom: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Untagged builds: the UI footer shows branch and commit. For pull
+          # requests, use the PR head rather than the synthetic merge commit.
+          build-args: |
+            COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+            BRANCH=${{ github.head_ref || github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

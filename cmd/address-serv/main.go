@@ -18,9 +18,11 @@ import (
 	"github.com/nils-witt/address-serve/internal/store"
 )
 
+// Build info, set at link time with -X (see Dockerfile and .goreleaser.yml).
 var (
 	version = "dev"
 	commit  = "none"
+	branch  string
 )
 
 func main() {
@@ -118,6 +120,7 @@ func uiConfig() api.UIConfig {
 		},
 		Version: version,
 		Commit:  commit,
+		Branch:  branch,
 	}
 }
 

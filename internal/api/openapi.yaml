@@ -910,7 +910,7 @@ components:
 
     UIConfig:
       type: object
-      required: [oidc, version, commit]
+      required: [oidc, version, commit, branch]
       properties:
         oidc:
           type: object
@@ -931,6 +931,10 @@ components:
         commit:
           type: string
           example: 39e8906
+        branch:
+          type: string
+          description: Git branch the build was made from; empty when unknown.
+          example: main
 
     Error:
       type: object

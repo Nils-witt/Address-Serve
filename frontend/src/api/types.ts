@@ -69,4 +69,6 @@ export interface UIConfig {
   };
   version: string;
   commit: string;
+  /** Git branch of the build; empty when unknown. */
+  branch: string;
 }
