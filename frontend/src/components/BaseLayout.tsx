@@ -29,6 +29,7 @@ export default function BaseLayout() {
   const tabs: { to: string; label: string }[] = [
     { to: ROUTES.streets, label: t('nav.streets') },
     { to: ROUTES.houseNumbers, label: t('nav.houseNumbers') },
+    { to: ROUTES.geoObjects, label: t('nav.geoObjects') },
   ];
 
   const handleOpenNavMenu = (event: MouseEvent<HTMLElement>) => {

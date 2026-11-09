@@ -160,6 +160,7 @@ func handleUpdateStreet(streets *store.StreetStore) http.HandlerFunc {
 	}
 }
 
+//nolint:dupl // mirrors handleDeleteHouseNumber and handleDeleteGeoObject; distinct entity types make a shared generic handler less readable than the duplication
 func handleDeleteStreet(streets *store.StreetStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := idFromRequest(r)

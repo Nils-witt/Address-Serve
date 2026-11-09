@@ -18,7 +18,8 @@
     "account": "Konto",
     "apiTokens": "API-Tokens",
     "logout": "Abmelden",
-    "openNavMenu": "Navigationsmenü öffnen"
+    "openNavMenu": "Navigationsmenü öffnen",
+    "geoObjects": "Geo-Objekte"
   },
   "auth": {
     "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an."
@@ -55,14 +56,17 @@
     "number": "Nummer",
     "numberAddition": "Zusatz",
     "postcode": "Postleitzahl",
-    "invalidCoordinates": "Gib einen Breitengrad zwischen -90 und 90 und einen Längengrad zwischen -180 und 180 ein."
+    "invalidCoordinates": "Gib einen Breitengrad zwischen -90 und 90 und einen Längengrad zwischen -180 und 180 ein.",
+    "name": "Name",
+    "group": "Gruppe",
+    "houseNumber": "Hausnummer"
   },
   "streets": {
     "searchLabel": "Straße suchen",
     "newStreet": "Neue Straße",
     "empty": "Keine passenden Straßen.",
     "deleteTitle": "Straße löschen?",
-    "deleteMessage": "{{name}} in {{city}} mit allen Hausnummern löschen?"
+    "deleteMessage": "{{name}} in {{city}} mit allen Hausnummern und Geo-Objekten löschen?"
   },
   "street": {
     "notFound": "Straße nicht gefunden."
@@ -84,6 +88,24 @@
     "newTitle": "Neue Hausnummer",
     "editTitle": "Hausnummer {{number}} bearbeiten",
     "invalidNumber": "Die Nummer muss eine ganze Zahl ab 1 sein."
+  },
+  "geoObjects": {
+    "title_one": "{{count}} Geo-Objekt",
+    "title_other": "{{count}} Geo-Objekte",
+    "searchLabel": "Name suchen",
+    "newGeoObject": "Geo-Objekt hinzufügen",
+    "empty": "Diese Straße hat noch keine Geo-Objekte.",
+    "emptyList": "Keine passenden Geo-Objekte.",
+    "deleteTitle": "Geo-Objekt löschen?",
+    "deleteMessage": "{{name}} ({{group}}) löschen?"
+  },
+  "geoObjectDialog": {
+    "newTitle": "Neues Geo-Objekt",
+    "editTitle": "{{name}} bearbeiten",
+    "streetSearchHint": "Gib mindestens 2 Buchstaben des Straßennamens ein.",
+    "streetRequired": "Wähle eine Straße.",
+    "noHouseNumber": "Keine",
+    "houseNumberHelp": "Optional. Bei Auswahl werden leere Koordinaten mit ihrer Position gefüllt."
   },
   "apiTokens": {
     "title": "API-Tokens",

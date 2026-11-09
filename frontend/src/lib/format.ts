@@ -1,4 +1,4 @@
-import type { HouseNumber } from '../api/types';
+import type { HouseNumber, Street } from '../api/types';
 
 export function formatCoordinates(latitude: number, longitude: number): string {
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
@@ -6,6 +6,12 @@ export function formatCoordinates(latitude: number, longitude: number): string {
 
 export function osmUrl(latitude: number, longitude: number): string {
   return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}`;
+}
+
+/** A street with where it is, e.g. "Hauptstraße (Mitte, Berlin)", since the
+ * same name recurs across districts and cities. */
+export function formatStreet(s: Pick<Street, 'name' | 'district' | 'city'>): string {
+  return `${s.name} (${s.district}, ${s.city})`;
 }
 
 export function formatHouseNumber(h: Pick<HouseNumber, 'number' | 'numberAddition'>): string {

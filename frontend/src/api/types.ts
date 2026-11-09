@@ -51,6 +51,30 @@ export interface HouseNumberFilter {
   country?: string;
 }
 
+export interface GeoObjectInput {
+  name: string;
+  group: string;
+  streetId: string;
+  /** A house number on `streetId`; null or omitted for none. */
+  houseNumberId?: string | null;
+  /** The object's own position, independent of its street and house number. */
+  latitude: number;
+  longitude: number;
+}
+
+export interface GeoObject extends GeoObjectInput {
+  id: string;
+}
+
+export interface GeoObjectFilter {
+  /** Substring of the name. */
+  name?: string;
+  /** Exact group, case-insensitive. */
+  group?: string;
+  streetId?: string;
+  houseNumberId?: string;
+}
+
 export interface APITokenInput {
   name: string;
   /** RFC 3339; null for a token that never expires. */

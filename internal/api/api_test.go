@@ -14,7 +14,7 @@ import (
 func TestResponsesAreGzipped(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandler(Config{CORSAllowedOrigin: "*"}, nil, nil, nil, nil)
+	handler := NewHandler(Config{CORSAllowedOrigin: "*"}, nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name           string

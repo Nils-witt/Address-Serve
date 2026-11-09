@@ -1,0 +1,23 @@
+.geo-objects-table {
+  margin-top: 24px;
+  padding: 16px 24px 24px;
+}
+
+.geo-objects-table__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.geo-objects-table__coordinates {
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.geo-objects-table__empty {
+  padding: 24px;
+  text-align: center;
+}

@@ -2,20 +2,29 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs, Link as MuiLink, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { HouseNumber, HouseNumberInput, StreetInput } from '../api/types';
+import type {
+  GeoObject,
+  GeoObjectInput,
+  HouseNumber,
+  HouseNumberInput,
+  StreetInput,
+} from '../api/types';
 import ErrorBanner from '../components/ErrorBanner';
 import PageNotice from '../components/PageNotice';
 import RouteFallback from '../components/RouteFallback';
 import StreetDialog from '../features/streets/StreetDialog';
 import { useApi } from '../hooks/useApi';
 import { useConfirm } from '../hooks/useConfirm';
+import { useGeoObjects } from '../hooks/useGeoObjects';
 import { useHouseNumbers } from '../hooks/useHouseNumbers';
 import { useInvalidate } from '../hooks/useInvalidate';
 import { useStreet } from '../hooks/useStreets';
 import { errorMessage } from '../lib/errors';
 import { compareHouseNumbers, formatHouseNumber } from '../lib/format';
 import { ROUTES } from '../routes';
+import GeoObjectDialog from '../features/geo-objects/GeoObjectDialog';
 import HouseNumberDialog from '../features/house-numbers/HouseNumberDialog';
+import GeoObjectsTable from './street-page/GeoObjectsTable';
 import HouseNumbersTable from './street-page/HouseNumbersTable';
 import StreetDetails from './street-page/StreetDetails';
 import './StreetPage.scss';
@@ -46,12 +55,27 @@ export default function StreetPage() {
     () => [...houseNumbers.data].sort(compareHouseNumbers),
     [houseNumbers.data],
   );
+  const houseNumbersById = useMemo(
+    () => new Map(houseNumbers.data.map((h) => [h.id, h])),
+    [houseNumbers.data],
+  );
+  const geoObjectFilter = useMemo(() => ({ streetId }), [streetId]);
+  const geoObjects = useGeoObjects(geoObjectFilter);
+  const sortedGeoObjects = useMemo(
+    () =>
+      [...geoObjects.data].sort(
+        (a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name),
+      ),
+    [geoObjects.data],
+  );
 
   const [streetDialogOpen, setStreetDialogOpen] = useState(false);
   // The edited house number stays set while the dialog closes, so its form
   // doesn't flip to "new house number" during the exit animation.
   const [houseNumberDialogOpen, setHouseNumberDialogOpen] = useState(false);
   const [editingHouseNumber, setEditingHouseNumber] = useState<HouseNumber | null>(null);
+  const [geoObjectDialogOpen, setGeoObjectDialogOpen] = useState(false);
+  const [editingGeoObject, setEditingGeoObject] = useState<GeoObject | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (street.loading) return <RouteFallback />;
@@ -117,6 +141,37 @@ export default function StreetPage() {
     }
   };
 
+  const openGeoObjectDialog = (g: GeoObject | null) => {
+    setEditingGeoObject(g);
+    setGeoObjectDialogOpen(true);
+  };
+
+  const onSubmitGeoObject = async (input: GeoObjectInput) => {
+    if (editingGeoObject) {
+      await api.updateGeoObject(editingGeoObject.id, input);
+    } else {
+      await api.createGeoObject(input);
+    }
+    await invalidate('geoObjects');
+  };
+
+  const onDeleteGeoObject = async (g: GeoObject) => {
+    const ok = await confirm({
+      title: t('geoObjects.deleteTitle'),
+      message: t('geoObjects.deleteMessage', { name: g.name, group: g.group }),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!ok) return;
+    setError(null);
+    try {
+      await api.deleteGeoObject(g.id);
+      await invalidate('geoObjects');
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
   return (
     <>
       <Breadcrumbs className="street-page__breadcrumbs">
@@ -133,7 +188,7 @@ export default function StreetPage() {
         </MuiLink>
         <Typography color="text.primary">{current.name}</Typography>
       </Breadcrumbs>
-      <ErrorBanner message={error ?? houseNumbers.error} />
+      <ErrorBanner message={error ?? houseNumbers.error ?? geoObjects.error} />
       <StreetDetails
         street={current}
         onEdit={() => setStreetDialogOpen(true)}
@@ -145,6 +200,14 @@ export default function StreetPage() {
         onCreate={() => openHouseNumberDialog(null)}
         onEdit={openHouseNumberDialog}
         onDelete={(h) => void onDeleteHouseNumber(h)}
+      />
+      <GeoObjectsTable
+        geoObjects={sortedGeoObjects}
+        houseNumbersById={houseNumbersById}
+        loading={geoObjects.loading}
+        onCreate={() => openGeoObjectDialog(null)}
+        onEdit={openGeoObjectDialog}
+        onDelete={(g) => void onDeleteGeoObject(g)}
       />
       <StreetDialog
         open={streetDialogOpen}
@@ -159,6 +222,14 @@ export default function StreetPage() {
         defaultPostcode={commonPostcode(houseNumbers.data)}
         onClose={() => setHouseNumberDialogOpen(false)}
         onSubmit={onSubmitHouseNumber}
+      />
+      <GeoObjectDialog
+        open={geoObjectDialogOpen}
+        geoObject={editingGeoObject}
+        street={current}
+        fixedStreet
+        onClose={() => setGeoObjectDialogOpen(false)}
+        onSubmit={onSubmitGeoObject}
       />
     </>
   );

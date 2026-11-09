@@ -7,10 +7,11 @@ const NO_STREETS: Street[] = [];
 const NO_CITIES: string[] = [];
 const NO_DISTRICTS: District[] = [];
 
-export function useStreets(filter: StreetFilter) {
+/** Streets matching `filter`; none while `enabled` is false. */
+export function useStreets(filter: StreetFilter, enabled = true) {
   const api = useApi();
   return useApiQuery(
-    { queryKey: queryKeys.streets(filter), queryFn: () => api.listStreets(filter) },
+    { queryKey: queryKeys.streets(filter), queryFn: () => api.listStreets(filter), enabled },
     NO_STREETS,
   );
 }

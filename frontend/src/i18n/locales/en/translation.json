@@ -18,7 +18,8 @@
     "account": "Account",
     "apiTokens": "API tokens",
     "logout": "Logout",
-    "openNavMenu": "Open navigation menu"
+    "openNavMenu": "Open navigation menu",
+    "geoObjects": "Geo objects"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -55,14 +56,17 @@
     "number": "Number",
     "numberAddition": "Addition",
     "postcode": "Postcode",
-    "invalidCoordinates": "Enter a latitude between -90 and 90 and a longitude between -180 and 180."
+    "invalidCoordinates": "Enter a latitude between -90 and 90 and a longitude between -180 and 180.",
+    "name": "Name",
+    "group": "Group",
+    "houseNumber": "House number"
   },
   "streets": {
     "searchLabel": "Search street",
     "newStreet": "New street",
     "empty": "No streets match.",
     "deleteTitle": "Delete street?",
-    "deleteMessage": "Delete {{name}} in {{city}} together with all of its house numbers?"
+    "deleteMessage": "Delete {{name}} in {{city}} together with all of its house numbers and geo objects?"
   },
   "street": {
     "notFound": "Street not found."
@@ -84,6 +88,24 @@
     "newTitle": "New house number",
     "editTitle": "Edit house number {{number}}",
     "invalidNumber": "The number must be a whole number of at least 1."
+  },
+  "geoObjects": {
+    "title_one": "{{count}} geo object",
+    "title_other": "{{count}} geo objects",
+    "searchLabel": "Search name",
+    "newGeoObject": "Add geo object",
+    "empty": "This street has no geo objects yet.",
+    "emptyList": "No geo objects match.",
+    "deleteTitle": "Delete geo object?",
+    "deleteMessage": "Delete {{name}} ({{group}})?"
+  },
+  "geoObjectDialog": {
+    "newTitle": "New geo object",
+    "editTitle": "Edit {{name}}",
+    "streetSearchHint": "Type at least 2 letters of the street name.",
+    "streetRequired": "Choose a street.",
+    "noHouseNumber": "None",
+    "houseNumberHelp": "Optional. Choosing one fills in empty coordinates with its position."
   },
   "apiTokens": {
     "title": "API tokens",

@@ -13,6 +13,9 @@ import type {
   APITokenInput,
   CreatedAPIToken,
   District,
+  GeoObject,
+  GeoObjectFilter,
+  GeoObjectInput,
   HouseNumber,
   HouseNumberFilter,
   HouseNumberInput,
@@ -154,7 +157,8 @@ export class ApiClient {
     return this.sendJsonForJson(`/api/streets/${encodeURIComponent(streetId)}`, 'PUT', input);
   }
 
-  /** Also deletes the street's house numbers (the database cascades). */
+  /** Also deletes the street's house numbers and geo objects (the database
+   * cascades). */
   deleteStreet(streetId: string): Promise<void> {
     return this.del(`/api/streets/${encodeURIComponent(streetId)}`);
   }
@@ -181,8 +185,27 @@ export class ApiClient {
     return this.sendJsonForJson(`/api/house-numbers/${encodeURIComponent(id)}`, 'PUT', input);
   }
 
+  /** Geo objects at the house number stay on its street, without it. */
   deleteHouseNumber(id: string): Promise<void> {
     return this.del(`/api/house-numbers/${encodeURIComponent(id)}`);
+  }
+
+  // ---- geo objects -------------------------------------------------------
+
+  listGeoObjects(filter: GeoObjectFilter = {}): Promise<GeoObject[]> {
+    return this.getJson(withQuery('/api/geo-objects', { ...filter }));
+  }
+
+  createGeoObject(input: GeoObjectInput): Promise<GeoObject> {
+    return this.sendJsonForJson('/api/geo-objects', 'POST', input);
+  }
+
+  updateGeoObject(id: string, input: GeoObjectInput): Promise<GeoObject> {
+    return this.sendJsonForJson(`/api/geo-objects/${encodeURIComponent(id)}`, 'PUT', input);
+  }
+
+  deleteGeoObject(id: string): Promise<void> {
+    return this.del(`/api/geo-objects/${encodeURIComponent(id)}`);
   }
 
   // ---- API tokens --------------------------------------------------------

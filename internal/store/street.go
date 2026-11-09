@@ -21,6 +21,9 @@ type Street struct {
 	// HouseNumbers is never loaded; it only declares the foreign key from
 	// house_numbers so deleting a street cascades to its house numbers.
 	HouseNumbers []HouseNumber `json:"-" gorm:"constraint:OnDelete:CASCADE"`
+	// GeoObjects is never loaded; it declares the foreign key from
+	// geo_objects so deleting a street cascades to its geo objects.
+	GeoObjects []GeoObject `json:"-" gorm:"constraint:OnDelete:CASCADE"`
 }
 
 // Validate reports whether s has all required fields and valid coordinates.

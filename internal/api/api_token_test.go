@@ -51,7 +51,7 @@ func TestAPITokenFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewHandler(Config{OIDC: oidc}, store.NewStreetStore(db), nil, nil, store.NewAPITokenStore(db))
+	handler := NewHandler(Config{OIDC: oidc}, store.NewStreetStore(db), nil, nil, nil, store.NewAPITokenStore(db))
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"iss":    provider.URL,

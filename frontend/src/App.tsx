@@ -20,6 +20,7 @@ import { ROUTES, ROUTE_SEGMENTS } from './routes.ts';
 const StreetsPage = lazy(() => import('./pages/StreetsPage.tsx'));
 const StreetPage = lazy(() => import('./pages/StreetPage.tsx'));
 const HouseNumbersPage = lazy(() => import('./pages/HouseNumbersPage.tsx'));
+const GeoObjectsPage = lazy(() => import('./pages/GeoObjectsPage.tsx'));
 const APITokensPage = lazy(() => import('./pages/APITokensPage.tsx'));
 
 export default function App() {
@@ -57,6 +58,7 @@ export default function App() {
                             path={ROUTE_SEGMENTS.houseNumbers}
                             element={<HouseNumbersPage />}
                           />
+                          <Route path={ROUTE_SEGMENTS.geoObjects} element={<GeoObjectsPage />} />
                           <Route path={ROUTE_SEGMENTS.apiTokens} element={<APITokensPage />} />
                           <Route path="*" element={<NotFoundPage />} />
                         </Route>

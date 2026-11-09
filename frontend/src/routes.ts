@@ -7,6 +7,7 @@ export const ROUTE_SEGMENTS = {
   callback: 'callback',
   streets: 'streets',
   houseNumbers: 'house-numbers',
+  geoObjects: 'geo-objects',
   apiTokens: 'api-tokens',
 } as const;
 
@@ -18,6 +19,7 @@ export const ROUTES = {
   callback: `${BASE}/${ROUTE_SEGMENTS.callback}`,
   streets: `${BASE}/${ROUTE_SEGMENTS.streets}`,
   houseNumbers: `${BASE}/${ROUTE_SEGMENTS.houseNumbers}`,
+  geoObjects: `${BASE}/${ROUTE_SEGMENTS.geoObjects}`,
   apiTokens: `${BASE}/${ROUTE_SEGMENTS.apiTokens}`,
   street: (streetId: string) => `${BASE}/${ROUTE_SEGMENTS.streets}/${streetId}`,
 } as const;

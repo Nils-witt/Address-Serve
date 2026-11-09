@@ -21,7 +21,7 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 
-	if err := db.AutoMigrate(&Street{}, &HouseNumber{}, &APIToken{}); err != nil {
+	if err := db.AutoMigrate(&Street{}, &HouseNumber{}, &GeoObject{}, &APIToken{}); err != nil {
 		return err
 	}
 

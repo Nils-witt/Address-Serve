@@ -17,6 +17,11 @@ type HouseNumber struct {
 	Postcode       string    `json:"postcode" gorm:"not null"`
 	Latitude       float64   `json:"latitude" gorm:"type:double precision;not null"`
 	Longitude      float64   `json:"longitude" gorm:"type:double precision;not null"`
+
+	// GeoObjects is never loaded; it declares the foreign key from
+	// geo_objects so deleting a house number detaches its geo objects, which
+	// stay on the street.
+	GeoObjects []GeoObject `json:"-" gorm:"constraint:OnDelete:SET NULL"`
 }
 
 // Validate reports whether h has all required fields and valid coordinates.

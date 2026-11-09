@@ -69,6 +69,7 @@ func run() error {
 		},
 		store.NewStreetStore(db),
 		store.NewHouseNumberStore(db),
+		store.NewGeoObjectStore(db),
 		store.NewBulkStore(db),
 		store.NewAPITokenStore(db),
 	)

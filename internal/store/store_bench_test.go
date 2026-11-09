@@ -60,7 +60,7 @@ func seedBenchDB(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err := db.Exec("DROP TABLE IF EXISTS house_numbers, streets CASCADE").Error; err != nil {
+	if err := db.Exec("DROP TABLE IF EXISTS geo_objects, house_numbers, streets CASCADE").Error; err != nil {
 		return nil, err
 	}
 
