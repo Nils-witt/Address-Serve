@@ -16,24 +16,24 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.4.0",
-    "@tanstack/react-query": "^5.105.0",
-    "i18next": "^26.5.11",
-    "i18next-browser-languagedetector": "^8.2.3",
+    "@tanstack/react-query": "^5.106.1",
+    "i18next": "^26.7.2",
+    "i18next-browser-languagedetector": "^8.3.0",
     "oidc-client-ts": "^3.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-i18next": "^17.1.9",
+    "react-i18next": "^17.1.13",
     "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.2",
-    "oxlint": "^1.90.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "oxlint": "^1.91.0",
     "prettier": "^3.9.10",
-    "sass": "^1.107.0",
+    "sass": "^1.108.0",
     "typescript": "~7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.6"
   }
 }
