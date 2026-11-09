@@ -1,9 +1,13 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+
+	"github.com/nils-witt/address-serve/internal/store"
 )
 
 // TestHandleReverseGeocodeValidation checks that invalid query parameters
@@ -11,7 +15,7 @@ import (
 func TestHandleReverseGeocodeValidation(t *testing.T) {
 	t.Parallel()
 
-	handler := handleReverseGeocode(nil)
+	handler := handleReverseGeocode(nil, nil)
 
 	tests := []struct {
 		name  string
@@ -42,5 +46,51 @@ func TestHandleReverseGeocodeValidation(t *testing.T) {
 				t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusBadRequest, rec.Body)
 			}
 		})
+	}
+}
+
+// TestHandleReverseGeocodeResponse checks the response shape against a real
+// database: both lists are always present and arrays, even when empty.
+func TestHandleReverseGeocodeResponse(t *testing.T) {
+	t.Parallel()
+
+	dsn := os.Getenv("ADDRESS_SERV_TEST_DSN")
+	if dsn == "" {
+		t.Skip("ADDRESS_SERV_TEST_DSN not set")
+	}
+
+	db, err := store.Open(t.Context(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = store.Close(db) })
+
+	if err := store.Migrate(t.Context(), db); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := handleReverseGeocode(store.NewHouseNumberStore(db), store.NewGeoObjectStore(db))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/reverse?lat=50.7&lon=7.1&limit=3", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusOK, rec.Body)
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding %s: %v", rec.Body, err)
+	}
+
+	for _, key := range []string{"houseNumbers", "geoObjects"} {
+		var list []json.RawMessage
+
+		raw, ok := body[key]
+		if !ok || json.Unmarshal(raw, &list) != nil || list == nil {
+			t.Errorf("%s = %s, want a JSON array", key, raw)
+		}
 	}
 }

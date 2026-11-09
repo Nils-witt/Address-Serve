@@ -31,5 +31,11 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("create house_numbers_earth_idx: %w", err)
 	}
 
+	// Serves the nearest-neighbour ordering in GeoObjectStore.Nearest.
+	err = db.Exec("CREATE INDEX IF NOT EXISTS geo_objects_earth_idx ON geo_objects USING gist (ll_to_earth(latitude, longitude))").Error
+	if err != nil {
+		return fmt.Errorf("create geo_objects_earth_idx: %w", err)
+	}
+
 	return nil
 }

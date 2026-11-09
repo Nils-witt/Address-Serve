@@ -3,6 +3,7 @@ package store
 import (
 	"math"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -93,5 +94,83 @@ func TestHouseNumberStore_Nearest(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGeoObjectStore_Nearest(t *testing.T) {
+	t.Parallel()
+
+	db := openBenchDB(t)
+	tag := uuid.NewString()
+
+	// A random point in the southern Pacific, as in TestHouseNumberStore_Nearest,
+	// so only the rows created here are near it.
+	lat := -65 + 15*rand.Float64()  //nolint:gosec // test data
+	lon := -150 + 50*rand.Float64() //nolint:gosec // test data
+
+	in := bulkStreet("Objektweg " + tag)
+	in.Latitude, in.Longitude = lat, lon
+	// The house number lies away from the geo object at it, so a distance
+	// measured from the house number would rank the geo objects differently.
+	in.HouseNumbers = []BulkHouseNumberInput{{Number: 7, Postcode: "53111", Latitude: lat + 0.01, Longitude: lon}}
+
+	result := createBulk(t, db, []BulkStreetInput{in})[0]
+	houseNumberID := result.HouseNumbers[0].ID
+	st := NewGeoObjectStore(db)
+
+	// "east" is ~6–9 m away, "north" ~11 m and "south" ~56 m.
+	for _, g := range []GeoObject{
+		{Name: "north", HouseNumberID: &houseNumberID, Latitude: lat + 0.0001, Longitude: lon},
+		{Name: "east", Latitude: lat, Longitude: lon + 0.00012},
+		{Name: "south", Latitude: lat - 0.0005, Longitude: lon},
+	} {
+		g.Group = "reverse-" + tag
+		g.StreetID = result.Street.ID
+
+		if _, err := st.Create(t.Context(), g); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := st.Nearest(t.Context(), lat, lon, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	names := []string{}
+	for _, n := range got {
+		names = append(names, n.GeoObject.Name)
+	}
+
+	if !slices.Equal(names, []string{"east", "north"}) {
+		t.Fatalf("Nearest names = %v, want [east north]", names)
+	}
+
+	for i, n := range got {
+		checkNearbyGeoObject(t, i, n, result.Street, lat, lon)
+	}
+
+	if got[0].HouseNumber != nil {
+		t.Errorf("east has house number %+v, want none", got[0].HouseNumber)
+	}
+
+	h := got[1].HouseNumber
+	if h == nil || h.ID != houseNumberID || h.Number != 7 || h.Postcode != "53111" || h.StreetID != result.Street.ID {
+		t.Errorf("north house number = %+v, want number 7 (%s)", h, houseNumberID)
+	}
+}
+
+// checkNearbyGeoObject checks that result i is on street and that its
+// distance is measured from the geo object to lat and lon.
+func checkNearbyGeoObject(t *testing.T, i int, n NearbyGeoObject, street Street, lat, lon float64) {
+	t.Helper()
+
+	if n.Street.ID != street.ID || n.Street.Name != street.Name {
+		t.Errorf("result %d street = %+v, want %s", i, n.Street, street.Name)
+	}
+
+	want := haversine(lat, lon, n.GeoObject.Latitude, n.GeoObject.Longitude)
+	if math.Abs(n.DistanceMeters-want) > 0.5 {
+		t.Errorf("result %d distance = %.2f m, want %.2f m", i, n.DistanceMeters, want)
 	}
 }

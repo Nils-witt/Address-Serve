@@ -789,11 +789,12 @@ paths:
     get:
       summary: Reverse geocode a coordinate
       description: >-
-        Returns the house numbers nearest to the given coordinate, nearest
-        first, each with its street and great-circle distance in meters. By
-        default only the nearest house number is returned; set limit to get
-        the n nearest. The response is always an array, empty if no house
-        numbers are stored.
+        Returns the house numbers and the geo objects nearest to the given
+        coordinate as two lists, each nearest first and ranked by its own
+        great-circle distance in meters. A geo object's distance is measured
+        to its own coordinates, not its street's or house number's. By default
+        only the nearest of each is returned; set limit to get the n nearest
+        of each. Both lists are always present, empty if nothing is stored.
       operationId: reverseGeocode
       tags: [geocoding]
       parameters:
@@ -825,16 +826,14 @@ paths:
             minimum: 1
             maximum: 100
             default: 1
-          description: Number of nearest house numbers to return
+          description: Number of nearest house numbers, and of nearest geo objects, to return
       responses:
         "200":
-          description: The nearest house numbers, nearest first
+          description: The nearest house numbers and geo objects, each nearest first
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/NearbyHouseNumber"
+                $ref: "#/components/schemas/ReverseGeocodeResult"
         "400":
           description: Missing or invalid lat, lon or limit
           content:
@@ -1081,6 +1080,39 @@ components:
           format: double
           description: Great-circle distance from the query point in meters
           example: 12.4
+
+    NearbyGeoObject:
+      type: object
+      required: [geoObject, street, distanceMeters]
+      properties:
+        geoObject:
+          $ref: "#/components/schemas/GeoObject"
+        street:
+          $ref: "#/components/schemas/Street"
+        houseNumber:
+          allOf:
+            - $ref: "#/components/schemas/HouseNumber"
+          description: The geo object's house number; omitted if it has none
+        distanceMeters:
+          type: number
+          format: double
+          description: Great-circle distance from the query point to the geo object in meters
+          example: 8.3
+
+    ReverseGeocodeResult:
+      type: object
+      required: [houseNumbers, geoObjects]
+      properties:
+        houseNumbers:
+          type: array
+          description: The nearest house numbers, nearest first
+          items:
+            $ref: "#/components/schemas/NearbyHouseNumber"
+        geoObjects:
+          type: array
+          description: The nearest geo objects, nearest first
+          items:
+            $ref: "#/components/schemas/NearbyGeoObject"
 
     GeoObjectInput:
       type: object

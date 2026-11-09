@@ -13,10 +13,21 @@ import (
 // maxReverseLimit caps the limit query parameter of GET /api/reverse.
 const maxReverseLimit = 100
 
-// handleReverseGeocode serves GET /api/reverse: the house numbers nearest to
-// the lat/lon query parameters, nearest first. limit (default 1) sets how
-// many are returned.
-func handleReverseGeocode(houseNumbers *store.HouseNumberStore) http.HandlerFunc {
+func registerReverseRoutes(mux *http.ServeMux, houseNumbers *store.HouseNumberStore, geoObjects *store.GeoObjectStore) {
+	mux.HandleFunc("GET /api/reverse", handleReverseGeocode(houseNumbers, geoObjects))
+}
+
+// reverseResult is the response of GET /api/reverse. Each list is ranked by
+// its own distance from the query point.
+type reverseResult struct {
+	HouseNumbers []store.NearbyHouseNumber `json:"houseNumbers"`
+	GeoObjects   []store.NearbyGeoObject   `json:"geoObjects"`
+}
+
+// handleReverseGeocode serves GET /api/reverse: the house numbers and the geo
+// objects nearest to the lat/lon query parameters, each nearest first. limit
+// (default 1) sets how many of each are returned.
+func handleReverseGeocode(houseNumbers *store.HouseNumberStore, geoObjects *store.GeoObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 
@@ -41,13 +52,19 @@ func handleReverseGeocode(houseNumbers *store.HouseNumberStore) http.HandlerFunc
 			}
 		}
 
-		nearby, err := houseNumbers.Nearest(r.Context(), lat, lon, limit)
+		nearbyHouseNumbers, err := houseNumbers.Nearest(r.Context(), lat, lon, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		writeJSON(w, http.StatusOK, nearby)
+		nearbyGeoObjects, err := geoObjects.Nearest(r.Context(), lat, lon, limit)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, reverseResult{HouseNumbers: nearbyHouseNumbers, GeoObjects: nearbyGeoObjects})
 	}
 }
 

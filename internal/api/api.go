@@ -38,6 +38,7 @@ func NewHandler(
 	registerStreetRoutes(mux, streets)
 	registerHouseNumberRoutes(mux, houseNumbers)
 	registerGeoObjectRoutes(mux, geoObjects)
+	registerReverseRoutes(mux, houseNumbers, geoObjects)
 	registerBulkRoutes(mux, bulk)
 	registerAPITokenRoutes(mux, tokens)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

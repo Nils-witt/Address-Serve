@@ -17,7 +17,6 @@ func registerHouseNumberRoutes(mux *http.ServeMux, houseNumbers *store.HouseNumb
 	mux.HandleFunc("GET /api/house-numbers/{id}", handleGetHouseNumber(houseNumbers))
 	mux.HandleFunc("PUT /api/house-numbers/{id}", handleUpdateHouseNumber(houseNumbers))
 	mux.HandleFunc("DELETE /api/house-numbers/{id}", handleDeleteHouseNumber(houseNumbers))
-	mux.HandleFunc("GET /api/reverse", handleReverseGeocode(houseNumbers))
 }
 
 //nolint:dupl // mirrors handleCreateStreet; distinct entity types make a shared generic handler less readable than the duplication
