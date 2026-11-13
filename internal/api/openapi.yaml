@@ -632,6 +632,18 @@ paths:
             type: string
             format: uuid
           description: Filter geo objects at this house number
+        - name: externalId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter the geo object with this exact external ID (case-sensitive)
+        - name: externalIdPrefix
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter geo objects whose external ID starts with this prefix (case-sensitive)
       responses:
         "200":
           description: A list of geo objects
@@ -670,6 +682,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GeoObject"
+        "409":
+          description: externalId is already used by another geo object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "400":
           description: Invalid request body, or streetId does not reference an existing street, houseNumberId does not reference an existing house number, or the house number is not on that street
           content:
@@ -725,6 +743,7 @@ paths:
 
     put:
       summary: Update a geo object
+      description: Replaces the geo object. An omitted externalId keeps the stored one.
       operationId: updateGeoObject
       tags: [geo-objects]
       requestBody:
@@ -740,6 +759,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GeoObject"
+        "409":
+          description: externalId is already used by another geo object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "400":
           description: Invalid ID or request body, or streetId does not reference an existing street, houseNumberId does not reference an existing house number, or the house number is not on that street
           content:
@@ -780,6 +805,132 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Geo object not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/geo-objects/by-external-id/{externalId}:
+    parameters:
+      - name: externalId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description: The geo object's external ID, set by the system that syncs it
+
+    put:
+      summary: Create or replace a geo object by external ID
+      description: >-
+        Creates the geo object with this external ID, or replaces it if it
+        exists, keeping its ID. The path value overrides any externalId in the
+        body. Meant for systems such as tileserve-go that keep their objects in
+        sync.
+      operationId: upsertGeoObjectByExternalId
+      tags: [geo-objects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoObjectInput"
+      responses:
+        "200":
+          description: The replaced geo object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoObject"
+        "201":
+          description: The created geo object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoObject"
+        "400":
+          description: Invalid external ID or request body, or invalid street or house number reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      summary: Delete a geo object by external ID
+      operationId: deleteGeoObjectByExternalId
+      tags: [geo-objects]
+      responses:
+        "204":
+          description: Geo object deleted
+        "400":
+          description: Invalid external ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Geo object not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/addresses/search:
+    get:
+      summary: Search addresses
+      description: >-
+        Free-text address search for autocompletion. A trailing number in q is
+        matched as a house number prefix ("Hauptstraße 1" finds 1, 10, 12, ...);
+        the rest matches street names as a case-insensitive substring. Each
+        result is a street with one of its house numbers, or the street alone
+        if it has none.
+      operationId: searchAddresses
+      tags: [streets]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Street name, optionally followed by a house number; the street part needs at least 2 characters
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Matching addresses, ordered by street name, city, district and house number
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AddressMatch"
+        "400":
+          description: q too short or limit out of range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
           content:
             application/json:
               schema:
@@ -1152,6 +1303,51 @@ components:
           minimum: -180
           maximum: 180
           example: 13.4135
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 255
+          nullable: true
+          description: >-
+            Optional ID of the object in another system that keeps it in sync,
+            such as tileserve-go. Unique across geo objects.
+          example: tileserve:6f1c2d3e-0000-4000-8000-000000000000:5b0f3c1e-8f2a-4a8e-9a43-2f1d6c7b9e10
+
+    AddressMatch:
+      type: object
+      required: [streetId, street, city, district, country, latitude, longitude]
+      properties:
+        streetId:
+          type: string
+          format: uuid
+        houseNumberId:
+          type: string
+          format: uuid
+        street:
+          type: string
+          example: Hauptstraße
+        houseNumber:
+          type: integer
+          example: 12
+        numberAddition:
+          type: string
+          example: a
+        postcode:
+          type: string
+          example: "53111"
+        city:
+          type: string
+        district:
+          type: string
+        country:
+          type: string
+        latitude:
+          type: number
+          format: double
+          description: The house number's position, or the street's when there is none
+        longitude:
+          type: number
+          format: double
 
     GeoObject:
       allOf:

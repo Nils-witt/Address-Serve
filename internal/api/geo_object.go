@@ -17,6 +17,8 @@ func registerGeoObjectRoutes(mux *http.ServeMux, geoObjects *store.GeoObjectStor
 	mux.HandleFunc("GET /api/geo-objects/{id}", handleGetGeoObject(geoObjects))
 	mux.HandleFunc("PUT /api/geo-objects/{id}", handleUpdateGeoObject(geoObjects))
 	mux.HandleFunc("DELETE /api/geo-objects/{id}", handleDeleteGeoObject(geoObjects))
+	mux.HandleFunc("PUT /api/geo-objects/by-external-id/{externalId}", handleUpsertGeoObjectByExternalID(geoObjects))
+	mux.HandleFunc("DELETE /api/geo-objects/by-external-id/{externalId}", handleDeleteGeoObjectByExternalID(geoObjects))
 }
 
 // isGeoObjectReferenceError reports whether err means the geo object's street
@@ -25,6 +27,21 @@ func isGeoObjectReferenceError(err error) bool {
 	return errors.Is(err, store.ErrStreetNotFound) ||
 		errors.Is(err, store.ErrHouseNumberNotFound) ||
 		errors.Is(err, store.ErrHouseNumberNotOnStreet)
+}
+
+// writeGeoObjectWriteError writes the response for an error returned by a
+// geo object write.
+func writeGeoObjectWriteError(w http.ResponseWriter, err error) {
+	switch {
+	case isGeoObjectReferenceError(err):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, store.ErrExternalIDTaken):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "geo object not found")
+	default:
+		writeError(w, http.StatusInternalServerError, err.Error())
+	}
 }
 
 func handleCreateGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
@@ -41,13 +58,8 @@ func handleCreateGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 		}
 
 		created, err := geoObjects.Create(r.Context(), g)
-		if isGeoObjectReferenceError(err) {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeGeoObjectWriteError(w, err)
 			return
 		}
 
@@ -60,8 +72,10 @@ func handleListGeoObjects(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 		query := r.URL.Query()
 
 		filter := store.GeoObjectFilter{
-			Name:  query.Get("name"),
-			Group: query.Get("group"),
+			Name:             query.Get("name"),
+			Group:            query.Get("group"),
+			ExternalID:       query.Get("externalId"),
+			ExternalIDPrefix: query.Get("externalIdPrefix"),
 		}
 
 		var err error
@@ -130,18 +144,8 @@ func handleUpdateGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 		}
 
 		updated, err := geoObjects.Update(r.Context(), id, g)
-		if isGeoObjectReferenceError(err) {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "geo object not found")
-			return
-		}
-
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeGeoObjectWriteError(w, err)
 			return
 		}
 
@@ -166,6 +170,70 @@ func handleDeleteGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// externalIDFromRequest returns the externalId path value, or an error if it
+// is empty or too long.
+func externalIDFromRequest(r *http.Request) (string, error) {
+	externalID := r.PathValue("externalId")
+	if err := (store.GeoObject{ExternalID: &externalID}).ValidateExternalID(); err != nil {
+		return "", err
+	}
+
+	return externalID, nil
+}
+
+func handleUpsertGeoObjectByExternalID(geoObjects *store.GeoObjectStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		externalID, err := externalIDFromRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		var g store.GeoObject
+		if err := json.NewDecoder(r.Body).Decode(&g); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+
+		g.ExternalID = &externalID
+
+		if err := g.Validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		saved, created, err := geoObjects.UpsertByExternalID(r.Context(), externalID, g)
+		if err != nil {
+			writeGeoObjectWriteError(w, err)
+			return
+		}
+
+		status := http.StatusOK
+		if created {
+			status = http.StatusCreated
+		}
+
+		writeJSON(w, status, saved)
+	}
+}
+
+func handleDeleteGeoObjectByExternalID(geoObjects *store.GeoObjectStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		externalID, err := externalIDFromRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if err := geoObjects.DeleteByExternalID(r.Context(), externalID); err != nil {
+			writeGeoObjectWriteError(w, err)
 			return
 		}
 

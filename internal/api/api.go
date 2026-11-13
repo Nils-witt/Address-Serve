@@ -39,6 +39,7 @@ func NewHandler(
 	registerHouseNumberRoutes(mux, houseNumbers)
 	registerGeoObjectRoutes(mux, geoObjects)
 	registerReverseRoutes(mux, houseNumbers, geoObjects)
+	registerAddressSearchRoutes(mux, houseNumbers)
 	registerBulkRoutes(mux, bulk)
 	registerAPITokenRoutes(mux, tokens)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

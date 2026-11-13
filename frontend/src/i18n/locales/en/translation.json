@@ -105,7 +105,9 @@
     "streetSearchHint": "Type at least 2 letters of the street name.",
     "streetRequired": "Choose a street.",
     "noHouseNumber": "None",
-    "houseNumberHelp": "Optional. Choosing one fills in empty coordinates with its position."
+    "houseNumberHelp": "Optional. Choosing one fills in empty coordinates with its position.",
+    "externalId": "External ID",
+    "externalIdHelp": "Set by the system that syncs this object. Its next sync overwrites changes made here."
   },
   "apiTokens": {
     "title": "API tokens",

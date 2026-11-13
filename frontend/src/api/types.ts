@@ -60,6 +60,9 @@ export interface GeoObjectInput {
   /** The object's own position, independent of its street and house number. */
   latitude: number;
   longitude: number;
+  /** ID in another system that keeps this object in sync, e.g. tileserve-go.
+   * Omitted on update to keep the stored one. */
+  externalId?: string | null;
 }
 
 export interface GeoObject extends GeoObjectInput {
@@ -73,6 +76,10 @@ export interface GeoObjectFilter {
   group?: string;
   streetId?: string;
   houseNumberId?: string;
+  /** Exact external ID. */
+  externalId?: string;
+  /** Prefix of the external ID. */
+  externalIdPrefix?: string;
 }
 
 export interface APITokenInput {

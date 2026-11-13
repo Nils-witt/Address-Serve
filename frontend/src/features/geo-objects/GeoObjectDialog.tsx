@@ -191,6 +191,15 @@ function GeoObjectForm({
           </MenuItem>
         ))}
       </TextField>
+      {geoObject?.externalId && (
+        <TextField
+          label={t('geoObjectDialog.externalId')}
+          size="small"
+          disabled
+          value={geoObject.externalId}
+          helperText={t('geoObjectDialog.externalIdHelp')}
+        />
+      )}
       <CoordinateFields
         latitude={latitude}
         longitude={longitude}

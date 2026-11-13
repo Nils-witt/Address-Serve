@@ -13,8 +13,9 @@ func TestGeoObjectHandlers_RejectBadRequests(t *testing.T) {
 	t.Parallel()
 
 	const (
-		validStreet = `"streetId":"db94a625-aa11-4c37-b9ff-9706e792e7dd"`
-		collection  = "/api/geo-objects"
+		validStreet  = `"streetId":"db94a625-aa11-4c37-b9ff-9706e792e7dd"`
+		collection   = "/api/geo-objects"
+		byExternalID = collection + "/by-external-id/ext-1"
 	)
 
 	tests := []struct {
@@ -31,6 +32,10 @@ func TestGeoObjectHandlers_RejectBadRequests(t *testing.T) {
 		{name: "create with latitude out of range", handler: handleCreateGeoObject(nil), method: http.MethodPost, target: collection, body: `{"name":"n","group":"g",` + validStreet + `,"latitude":91}`},
 		{name: "list with invalid street id", handler: handleListGeoObjects(nil), method: http.MethodGet, target: collection + "?streetId=nope"},
 		{name: "list with invalid house number id", handler: handleListGeoObjects(nil), method: http.MethodGet, target: collection + "?houseNumberId=nope"},
+		{name: "upsert with invalid json", handler: withPathValue("externalId", "ext-1", handleUpsertGeoObjectByExternalID(nil)), method: http.MethodPut, target: byExternalID, body: "{"},
+		{name: "upsert without street", handler: withPathValue("externalId", "ext-1", handleUpsertGeoObjectByExternalID(nil)), method: http.MethodPut, target: byExternalID, body: `{"name":"n","group":"g"}`},
+		{name: "upsert with too long external id", handler: withPathValue("externalId", strings.Repeat("x", 256), handleUpsertGeoObjectByExternalID(nil)), method: http.MethodPut, target: byExternalID, body: `{"name":"n","group":"g",` + validStreet + `}`},
+		{name: "delete with empty external id", handler: withPathValue("externalId", "", handleDeleteGeoObjectByExternalID(nil)), method: http.MethodDelete, target: byExternalID},
 	}
 
 	for _, tt := range tests {
@@ -46,5 +51,14 @@ func TestGeoObjectHandlers_RejectBadRequests(t *testing.T) {
 				t.Errorf("status = %d, want %d (body %q)", rec.Code, http.StatusBadRequest, rec.Body.String())
 			}
 		})
+	}
+}
+
+// withPathValue returns h with the path value key set to value, as the mux
+// would for a matching route.
+func withPathValue(key, value string, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue(key, value)
+		h(w, r)
 	}
 }

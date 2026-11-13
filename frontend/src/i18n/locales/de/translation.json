@@ -105,7 +105,9 @@
     "streetSearchHint": "Gib mindestens 2 Buchstaben des Straßennamens ein.",
     "streetRequired": "Wähle eine Straße.",
     "noHouseNumber": "Keine",
-    "houseNumberHelp": "Optional. Bei Auswahl werden leere Koordinaten mit ihrer Position gefüllt."
+    "houseNumberHelp": "Optional. Bei Auswahl werden leere Koordinaten mit ihrer Position gefüllt.",
+    "externalId": "Externe ID",
+    "externalIdHelp": "Vom System gesetzt, das dieses Objekt synchronisiert. Die nächste Synchronisierung überschreibt Änderungen von hier."
   },
   "apiTokens": {
     "title": "API-Tokens",

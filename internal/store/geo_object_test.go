@@ -32,6 +32,9 @@ func TestGeoObject_Validate(t *testing.T) {
 		{name: "longitude too large", modify: func(g *GeoObject) { g.Longitude = 180.1 }, expectErr: true},
 		{name: "longitude too small", modify: func(g *GeoObject) { g.Longitude = -180.1 }, expectErr: true},
 		{name: "boundary coordinates", modify: func(g *GeoObject) { g.Latitude, g.Longitude = -90, 180 }},
+		{name: "valid external id", modify: func(g *GeoObject) { g.ExternalID = new("tileserve:a:b") }},
+		{name: "empty external id", modify: func(g *GeoObject) { g.ExternalID = new("") }, expectErr: true},
+		{name: "too long external id", modify: func(g *GeoObject) { g.ExternalID = new(strings.Repeat("x", 256)) }, expectErr: true},
 	}
 
 	for _, tt := range tests {
@@ -314,5 +317,64 @@ func TestGeoObjectStore_ReferenceDeletion(t *testing.T) {
 
 	if _, err := f.geoObjects.Get(ctx, onStreetB.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Get after street delete: error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestGeoObjectStore_UpsertByExternalID(t *testing.T) {
+	t.Parallel()
+
+	f := newGeoObjectFixture(t)
+	externalID := "test:" + f.tag + ":1"
+	g := GeoObject{Name: "Synced", Group: "sync-" + f.tag, StreetID: f.streetA, Latitude: 50, Longitude: 7}
+
+	created, isNew, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g)
+	if err != nil || !isNew {
+		t.Fatalf("first UpsertByExternalID = (%v, %v), want created", isNew, err)
+	}
+
+	g.Name = "Synced renamed"
+
+	updated, isNew, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g)
+	if err != nil || isNew || updated.ID != created.ID || updated.Name != g.Name {
+		t.Fatalf("second UpsertByExternalID = (%+v, %v, %v), want update of %s", updated, isNew, err, created.ID)
+	}
+
+	// Updating by ID without an external ID keeps the stored one.
+	g.Name = "Edited by hand"
+	if _, err := f.geoObjects.Update(t.Context(), created.ID, g); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := f.get(t, created.ID); got.ExternalID == nil || *got.ExternalID != externalID {
+		t.Errorf("after Update, ExternalID = %v, want %q", got.ExternalID, externalID)
+	}
+}
+
+func TestGeoObjectStore_ExternalIDListAndDelete(t *testing.T) {
+	t.Parallel()
+
+	f := newGeoObjectFixture(t)
+	prefix := "test:" + f.tag + ":"
+	externalID := prefix + "1"
+
+	synced := f.create(t, GeoObject{Name: "Synced", Group: "sync-" + f.tag, StreetID: f.streetA, ExternalID: &externalID})
+	f.create(t, GeoObject{Name: "Other", Group: "sync-" + f.tag, StreetID: f.streetA})
+
+	listed, err := f.geoObjects.List(t.Context(), GeoObjectFilter{ExternalIDPrefix: prefix})
+	if err != nil || len(listed) != 1 || listed[0].ID != synced.ID {
+		t.Fatalf("List by prefix = (%+v, %v), want only %s", listed, err, synced.ID)
+	}
+
+	duplicate := GeoObject{Name: "Dup", Group: "g", StreetID: f.streetA, ExternalID: &externalID}
+	if _, err := f.geoObjects.Create(t.Context(), duplicate); !errors.Is(err, ErrExternalIDTaken) {
+		t.Errorf("Create with taken external ID = %v, want ErrExternalIDTaken", err)
+	}
+
+	if err := f.geoObjects.DeleteByExternalID(t.Context(), externalID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.geoObjects.DeleteByExternalID(t.Context(), externalID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("second DeleteByExternalID = %v, want ErrNotFound", err)
 	}
 }

@@ -37,5 +37,11 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("create geo_objects_earth_idx: %w", err)
 	}
 
+	// Lets other systems address their geo objects by GeoObject.ExternalID.
+	err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS geo_objects_external_id_key ON geo_objects (external_id) WHERE external_id IS NOT NULL").Error
+	if err != nil {
+		return fmt.Errorf("create geo_objects_external_id_key: %w", err)
+	}
+
 	return nil
 }

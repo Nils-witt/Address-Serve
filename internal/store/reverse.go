@@ -125,6 +125,7 @@ type nearbyGeoObjectRow struct {
 	HouseNumberID   *uuid.UUID
 	Latitude        float64
 	Longitude       float64
+	ExternalID      *string
 	HNumber         *int          `gorm:"column:h_number"`
 	HNumberAddition *string       `gorm:"column:h_number_addition"`
 	HPostcode       *string       `gorm:"column:h_postcode"`
@@ -165,7 +166,7 @@ func deref[T any](p *T) T {
 // geo_objects_earth_idx. A geo object's house number is on its own street, so
 // joining it adds no rows.
 const nearestGeoObjectsQuery = `
-SELECT g.id, g.name, g.group_name, g.street_id, g.house_number_id, g.latitude, g.longitude,
+SELECT g.id, g.name, g.group_name, g.street_id, g.house_number_id, g.latitude, g.longitude, g.external_id,
        h.number AS h_number, h.number_addition AS h_number_addition, h.postcode AS h_postcode,
        h.latitude AS h_latitude, h.longitude AS h_longitude,
        ` + streetSelect + `,
@@ -199,6 +200,7 @@ func (st *GeoObjectStore) Nearest(ctx context.Context, lat, lon float64, limit i
 				HouseNumberID: r.HouseNumberID,
 				Latitude:      r.Latitude,
 				Longitude:     r.Longitude,
+				ExternalID:    r.ExternalID,
 			},
 			Street:         r.StreetCols.street(),
 			HouseNumber:    r.houseNumber(),
