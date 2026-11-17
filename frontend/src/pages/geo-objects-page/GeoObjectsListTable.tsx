@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
+  Checkbox,
   IconButton,
   Link,
   Paper,
@@ -34,12 +35,17 @@ export interface GeoObjectRow {
 export default function GeoObjectsListTable({
   rows,
   loading,
+  selected,
+  onSelectedChange,
   onEdit,
   onDelete,
 }: {
   /** Already in display order. */
   rows: GeoObjectRow[];
   loading: boolean;
+  /** IDs of the selected geo objects, all among `rows`. */
+  selected: ReadonlySet<string>;
+  onSelectedChange: (selected: Set<string>) => void;
   onEdit: (row: GeoObjectRow) => void;
   onDelete: (row: GeoObjectRow) => void;
 }) {
@@ -59,12 +65,33 @@ export default function GeoObjectsListTable({
   const streetIds = useMemo(() => (streetIdsKey ? streetIdsKey.split(',') : []), [streetIdsKey]);
   const houseNumbersById = useHouseNumbersById(streetIds);
 
+  // The header checkbox covers every row matching the filter, not just this
+  // page, so a whole group can be selected at once.
+  const allSelected = rows.length > 0 && selected.size === rows.length;
+  const toggleAll = () =>
+    onSelectedChange(allSelected ? new Set() : new Set(rows.map((r) => r.geoObject.id)));
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (!next.delete(id)) next.add(id);
+    onSelectedChange(next);
+  };
+
   return (
     <Paper className="geo-objects-list-table">
       <TableContainer>
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  size="small"
+                  checked={allSelected}
+                  indeterminate={selected.size > 0 && !allSelected}
+                  disabled={rows.length === 0}
+                  onChange={toggleAll}
+                  slotProps={{ input: { 'aria-label': t('geoObjects.selectAll') } }}
+                />
+              </TableCell>
               <TableCell>{t('fields.name')}</TableCell>
               <TableCell>{t('fields.group')}</TableCell>
               <TableCell>{t('fields.streetName')}</TableCell>
@@ -81,7 +108,17 @@ export default function GeoObjectsListTable({
                 ? houseNumbersById.get(g.houseNumberId)
                 : undefined;
               return (
-                <TableRow key={g.id} hover>
+                <TableRow key={g.id} hover selected={selected.has(g.id)}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={selected.has(g.id)}
+                      onChange={() => toggle(g.id)}
+                      slotProps={{
+                        input: { 'aria-label': t('geoObjects.select', { name: g.name }) },
+                      }}
+                    />
+                  </TableCell>
                   <TableCell>{g.name}</TableCell>
                   <TableCell>{g.group}</TableCell>
                   <TableCell>

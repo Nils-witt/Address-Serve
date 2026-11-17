@@ -14,6 +14,7 @@ import (
 func registerGeoObjectRoutes(mux *http.ServeMux, geoObjects *store.GeoObjectStore) {
 	mux.HandleFunc("POST /api/geo-objects", handleCreateGeoObject(geoObjects))
 	mux.HandleFunc("GET /api/geo-objects", handleListGeoObjects(geoObjects))
+	mux.HandleFunc("POST /api/geo-objects/bulk-delete", handleBulkDeleteGeoObjects(geoObjects))
 	mux.HandleFunc("GET /api/geo-objects/{id}", handleGetGeoObject(geoObjects))
 	mux.HandleFunc("PUT /api/geo-objects/{id}", handleUpdateGeoObject(geoObjects))
 	mux.HandleFunc("DELETE /api/geo-objects/{id}", handleDeleteGeoObject(geoObjects))
@@ -174,6 +175,34 @@ func handleDeleteGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// bulkDeleteResult is the response of a bulk delete.
+type bulkDeleteResult struct {
+	Deleted int64 `json:"deleted"`
+}
+
+func handleBulkDeleteGeoObjects(geoObjects *store.GeoObjectStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var refs store.GeoObjectRefs
+		if err := json.NewDecoder(r.Body).Decode(&refs); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+
+		if err := refs.Validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		deleted, err := geoObjects.DeleteMany(r.Context(), refs)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, bulkDeleteResult{Deleted: deleted})
 	}
 }
 

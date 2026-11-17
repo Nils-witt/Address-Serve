@@ -208,6 +208,16 @@ export class ApiClient {
     return this.del(`/api/geo-objects/${encodeURIComponent(id)}`);
   }
 
+  /** Resolves to the number deleted; IDs that no longer exist are skipped. */
+  async deleteGeoObjects(ids: string[]): Promise<number> {
+    const { deleted } = await this.sendJsonForJson<{ deleted: number }>(
+      '/api/geo-objects/bulk-delete',
+      'POST',
+      { ids },
+    );
+    return deleted;
+  }
+
   // ---- API tokens --------------------------------------------------------
 
   listAPITokens(): Promise<APIToken[]> {

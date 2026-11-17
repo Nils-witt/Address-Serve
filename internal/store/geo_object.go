@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -284,6 +285,66 @@ func (st *GeoObjectStore) DeleteByExternalID(ctx context.Context, externalID str
 // Delete removes the geo object with the given ID, or returns ErrNotFound.
 func (st *GeoObjectStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return requireOneRow(st.db.WithContext(ctx).Delete(&GeoObject{}, "id = ?", id))
+}
+
+// MaxBulkDeleteGeoObjects caps the IDs plus external IDs of one
+// GeoObjectRefs, keeping the DELETE well below PostgreSQL's limit of 65535
+// bind parameters.
+const MaxBulkDeleteGeoObjects = 10000
+
+// GeoObjectRefs names geo objects by ID, by external ID, or both.
+type GeoObjectRefs struct {
+	IDs         []uuid.UUID `json:"ids"`
+	ExternalIDs []string    `json:"externalIds"`
+}
+
+// Validate reports whether r names between 1 and MaxBulkDeleteGeoObjects geo
+// objects with valid IDs and external IDs.
+func (r GeoObjectRefs) Validate() error {
+	total := len(r.IDs) + len(r.ExternalIDs)
+	if total == 0 {
+		return errors.New("at least one id or externalId is required")
+	}
+
+	if total > MaxBulkDeleteGeoObjects {
+		return fmt.Errorf("at most %d ids and externalIds are allowed", MaxBulkDeleteGeoObjects)
+	}
+
+	for i, id := range r.IDs {
+		if id == uuid.Nil {
+			return fmt.Errorf("ids[%d] must be a valid id", i)
+		}
+	}
+
+	for i, externalID := range r.ExternalIDs {
+		if err := (GeoObject{ExternalID: &externalID}).ValidateExternalID(); err != nil {
+			return fmt.Errorf("externalIds[%d]: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// DeleteMany removes every geo object named by refs in a single statement and
+// returns how many it removed. Refs that match no geo object are skipped, so
+// a repeated call is harmless.
+func (st *GeoObjectStore) DeleteMany(ctx context.Context, refs GeoObjectRefs) (int64, error) {
+	query := st.db.WithContext(ctx)
+
+	switch {
+	case len(refs.IDs) > 0 && len(refs.ExternalIDs) > 0:
+		query = query.Where("id IN ? OR external_id IN ?", refs.IDs, refs.ExternalIDs)
+	case len(refs.IDs) > 0:
+		query = query.Where("id IN ?", refs.IDs)
+	case len(refs.ExternalIDs) > 0:
+		query = query.Where("external_id IN ?", refs.ExternalIDs)
+	default:
+		return 0, nil
+	}
+
+	res := query.Delete(&GeoObject{})
+
+	return res.RowsAffected, res.Error
 }
 
 // checkHouseNumberOnStreet verifies that g's house number, if any, exists and

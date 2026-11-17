@@ -378,3 +378,68 @@ func TestGeoObjectStore_ExternalIDListAndDelete(t *testing.T) {
 		t.Errorf("second DeleteByExternalID = %v, want ErrNotFound", err)
 	}
 }
+
+func TestGeoObjectStore_DeleteMany(t *testing.T) {
+	t.Parallel()
+
+	f := newGeoObjectFixture(t)
+	ctx := t.Context()
+	group := "bulk-" + f.tag
+	externalID := "test:" + f.tag + ":bulk"
+
+	byID := f.create(t, GeoObject{Name: "By ID", Group: group, StreetID: f.streetA})
+	byExternalID := f.create(t, GeoObject{Name: "By external ID", Group: group, StreetID: f.streetA, ExternalID: &externalID})
+	both := f.create(t, GeoObject{Name: "Both", Group: group, StreetID: f.streetB})
+	kept := f.create(t, GeoObject{Name: "Kept", Group: group, StreetID: f.streetB})
+
+	refs := GeoObjectRefs{
+		// both is named twice and uuid.New() matches nothing; neither may
+		// inflate the count.
+		IDs:         []uuid.UUID{byID.ID, both.ID, both.ID, uuid.New()},
+		ExternalIDs: []string{externalID, "test:" + f.tag + ":missing"},
+	}
+
+	deleted, err := f.geoObjects.DeleteMany(ctx, refs)
+	if err != nil || deleted != 3 {
+		t.Fatalf("DeleteMany = (%d, %v), want (3, nil)", deleted, err)
+	}
+
+	for _, g := range []GeoObject{byID, byExternalID, both} {
+		if _, err := f.geoObjects.Get(ctx, g.ID); !errors.Is(err, ErrNotFound) {
+			t.Errorf("Get(%s) after DeleteMany: error = %v, want ErrNotFound", g.Name, err)
+		}
+	}
+
+	f.get(t, kept.ID)
+
+	if deleted, err := f.geoObjects.DeleteMany(ctx, refs); err != nil || deleted != 0 {
+		t.Errorf("repeated DeleteMany = (%d, %v), want (0, nil)", deleted, err)
+	}
+}
+
+func TestGeoObjectRefs_Validate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		refs      GeoObjectRefs
+		expectErr bool
+	}{
+		{name: "ids only", refs: GeoObjectRefs{IDs: []uuid.UUID{uuid.New()}}},
+		{name: "external ids only", refs: GeoObjectRefs{ExternalIDs: []string{"a"}}},
+		{name: "empty", refs: GeoObjectRefs{}, expectErr: true},
+		{name: "nil id", refs: GeoObjectRefs{IDs: []uuid.UUID{uuid.Nil}}, expectErr: true},
+		{name: "empty external id", refs: GeoObjectRefs{ExternalIDs: []string{""}}, expectErr: true},
+		{name: "too many", refs: GeoObjectRefs{IDs: make([]uuid.UUID, MaxBulkDeleteGeoObjects), ExternalIDs: []string{"a"}}, expectErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tt.refs.Validate(); (err != nil) != tt.expectErr {
+				t.Errorf("Validate() error = %v, expectErr %v", err, tt.expectErr)
+			}
+		})
+	}
+}

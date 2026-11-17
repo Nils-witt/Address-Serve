@@ -701,6 +701,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/geo-objects/bulk-delete:
+    post:
+      summary: Delete many geo objects
+      description: >-
+        Deletes every geo object named by ID or by external ID in a single
+        statement. Names that match no geo object are skipped, so the request
+        can be repeated safely. At most 10000 IDs and external IDs together.
+      operationId: bulkDeleteGeoObjects
+      tags: [geo-objects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoObjectRefs"
+      responses:
+        "200":
+          description: How many geo objects were deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeleteResult"
+        "400":
+          description: Invalid request body, no IDs given, or too many IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/geo-objects/{id}:
     parameters:
       - name: id
@@ -1359,6 +1394,31 @@ components:
               format: uuid
               example: 5b0f3c1e-8f2a-4a8e-9a43-2f1d6c7b9e10
         - $ref: "#/components/schemas/GeoObjectInput"
+
+    GeoObjectRefs:
+      type: object
+      description: Geo objects named by ID, by external ID, or both. At least one entry is required.
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        externalIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 255
+
+    BulkDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          format: int64
+          description: Number of geo objects deleted
 
     BulkHouseNumberInput:
       type: object

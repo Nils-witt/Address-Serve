@@ -16,3 +16,9 @@
 .geo-objects-toolbar__select {
   min-width: 200px;
 }
+
+.geo-objects-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

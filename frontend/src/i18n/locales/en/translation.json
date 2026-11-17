@@ -97,7 +97,15 @@
     "empty": "This street has no geo objects yet.",
     "emptyList": "No geo objects match.",
     "deleteTitle": "Delete geo object?",
-    "deleteMessage": "Delete {{name}} ({{group}})?"
+    "deleteMessage": "Delete {{name}} ({{group}})?",
+    "deleteSelected_one": "Delete {{count}} selected",
+    "deleteSelected_other": "Delete {{count}} selected",
+    "deleteSelectedTitle_one": "Delete {{count}} geo object?",
+    "deleteSelectedTitle_other": "Delete {{count}} geo objects?",
+    "deleteSelectedMessage_one": "Delete the selected geo object? This cannot be undone.",
+    "deleteSelectedMessage_other": "Delete the {{count}} selected geo objects? This cannot be undone.",
+    "selectAll": "Select all geo objects",
+    "select": "Select {{name}}"
   },
   "geoObjectDialog": {
     "newTitle": "New geo object",

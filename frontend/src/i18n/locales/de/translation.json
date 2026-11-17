@@ -97,7 +97,15 @@
     "empty": "Diese Straße hat noch keine Geo-Objekte.",
     "emptyList": "Keine passenden Geo-Objekte.",
     "deleteTitle": "Geo-Objekt löschen?",
-    "deleteMessage": "{{name}} ({{group}}) löschen?"
+    "deleteMessage": "{{name}} ({{group}}) löschen?",
+    "deleteSelected_one": "{{count}} ausgewähltes löschen",
+    "deleteSelected_other": "{{count}} ausgewählte löschen",
+    "deleteSelectedTitle_one": "{{count}} Geo-Objekt löschen?",
+    "deleteSelectedTitle_other": "{{count}} Geo-Objekte löschen?",
+    "deleteSelectedMessage_one": "Das ausgewählte Geo-Objekt löschen? Das kann nicht rückgängig gemacht werden.",
+    "deleteSelectedMessage_other": "Die {{count}} ausgewählten Geo-Objekte löschen? Das kann nicht rückgängig gemacht werden.",
+    "selectAll": "Alle Geo-Objekte auswählen",
+    "select": "{{name}} auswählen"
   },
   "geoObjectDialog": {
     "newTitle": "Neues Geo-Objekt",

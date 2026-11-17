@@ -68,6 +68,14 @@ export default function GeoObjectsPage() {
   const [editing, setEditing] = useState<GeoObjectRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Rows filtered out or deleted elsewhere drop out of the selection, so it
+  // never covers objects the user can't see.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const selected = useMemo(
+    () => new Set(rows.map((r) => r.geoObject.id).filter((id) => selectedIds.has(id))),
+    [rows, selectedIds],
+  );
+
   const openDialog = (row: GeoObjectRow | null) => {
     setEditing(row);
     setDialogOpen(true);
@@ -99,6 +107,25 @@ export default function GeoObjectsPage() {
     }
   };
 
+  const onDeleteSelected = async () => {
+    const ids = [...selected];
+    const ok = await confirm({
+      title: t('geoObjects.deleteSelectedTitle', { count: ids.length }),
+      message: t('geoObjects.deleteSelectedMessage', { count: ids.length }),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!ok) return;
+    setError(null);
+    try {
+      await api.deleteGeoObjects(ids);
+      setSelectedIds(new Set());
+      await invalidate('geoObjects');
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
   return (
     <>
       <GeoObjectsToolbar
@@ -109,12 +136,16 @@ export default function GeoObjectsPage() {
           setFilter('name', value.trim());
         }}
         onGroupChange={(value) => setFilter('group', value)}
+        selectedCount={selected.size}
         onCreate={() => openDialog(null)}
+        onDeleteSelected={() => void onDeleteSelected()}
       />
       <ErrorBanner message={error ?? geoObjects.error ?? streets.error} />
       <GeoObjectsListTable
         rows={rows}
         loading={geoObjects.loading || streets.loading}
+        selected={selected}
+        onSelectedChange={setSelectedIds}
         onEdit={openDialog}
         onDelete={(row) => void onDelete(row)}
       />

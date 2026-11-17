@@ -16,6 +16,7 @@ func TestGeoObjectHandlers_RejectBadRequests(t *testing.T) {
 		validStreet  = `"streetId":"db94a625-aa11-4c37-b9ff-9706e792e7dd"`
 		collection   = "/api/geo-objects"
 		byExternalID = collection + "/by-external-id/ext-1"
+		bulkDelete   = collection + "/bulk-delete"
 	)
 
 	tests := []struct {
@@ -35,6 +36,11 @@ func TestGeoObjectHandlers_RejectBadRequests(t *testing.T) {
 		{name: "upsert with invalid json", handler: withPathValue("externalId", "ext-1", handleUpsertGeoObjectByExternalID(nil)), method: http.MethodPut, target: byExternalID, body: "{"},
 		{name: "upsert without street", handler: withPathValue("externalId", "ext-1", handleUpsertGeoObjectByExternalID(nil)), method: http.MethodPut, target: byExternalID, body: `{"name":"n","group":"g"}`},
 		{name: "upsert with too long external id", handler: withPathValue("externalId", strings.Repeat("x", 256), handleUpsertGeoObjectByExternalID(nil)), method: http.MethodPut, target: byExternalID, body: `{"name":"n","group":"g",` + validStreet + `}`},
+		{name: "bulk delete with invalid json", handler: handleBulkDeleteGeoObjects(nil), method: http.MethodPost, target: bulkDelete, body: "{"},
+		{name: "bulk delete with nothing named", handler: handleBulkDeleteGeoObjects(nil), method: http.MethodPost, target: bulkDelete, body: `{"ids":[],"externalIds":[]}`},
+		{name: "bulk delete with invalid id", handler: handleBulkDeleteGeoObjects(nil), method: http.MethodPost, target: bulkDelete, body: `{"ids":["nope"]}`},
+		{name: "bulk delete with nil id", handler: handleBulkDeleteGeoObjects(nil), method: http.MethodPost, target: bulkDelete, body: `{"ids":["00000000-0000-0000-0000-000000000000"]}`},
+		{name: "bulk delete with empty external id", handler: handleBulkDeleteGeoObjects(nil), method: http.MethodPost, target: bulkDelete, body: `{"externalIds":[""]}`},
 		{name: "delete with empty external id", handler: withPathValue("externalId", "", handleDeleteGeoObjectByExternalID(nil)), method: http.MethodDelete, target: byExternalID},
 	}
 
