@@ -36,7 +36,7 @@ func writeGeoObjectWriteError(w http.ResponseWriter, err error) {
 	switch {
 	case isGeoObjectReferenceError(err):
 		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, store.ErrExternalIDTaken):
+	case errors.Is(err, store.ErrExternalIDTaken), errors.Is(err, store.ErrNameTaken):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "geo object not found")

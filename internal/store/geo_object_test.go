@@ -209,6 +209,38 @@ func TestGeoObjectStore_InvalidReferences(t *testing.T) {
 	}
 }
 
+func TestGeoObjectStore_NameUniquePerGroup(t *testing.T) {
+	t.Parallel()
+
+	f := newGeoObjectFixture(t)
+	ctx := t.Context()
+	group := "unique-" + f.tag
+	first := f.create(t, GeoObject{Name: "Hydrant 1", Group: group, StreetID: f.streetA})
+	second := f.create(t, GeoObject{Name: "Bench", Group: group, StreetID: f.streetA})
+
+	// The same name in another group is allowed.
+	f.create(t, GeoObject{Name: first.Name, Group: "other-" + f.tag, StreetID: f.streetA})
+
+	taken := GeoObject{Name: first.Name, Group: group, StreetID: f.streetB}
+
+	if _, err := f.geoObjects.Create(ctx, taken); !errors.Is(err, ErrNameTaken) {
+		t.Errorf("Create with taken name = %v, want ErrNameTaken", err)
+	}
+
+	if _, err := f.geoObjects.Update(ctx, second.ID, taken); !errors.Is(err, ErrNameTaken) {
+		t.Errorf("Update to taken name = %v, want ErrNameTaken", err)
+	}
+
+	if _, _, err := f.geoObjects.UpsertByExternalID(ctx, "unique:"+f.tag, taken); !errors.Is(err, ErrNameTaken) {
+		t.Errorf("UpsertByExternalID with taken name = %v, want ErrNameTaken", err)
+	}
+
+	// Keeping its own name is no conflict.
+	if _, err := f.geoObjects.Update(ctx, first.ID, taken); err != nil {
+		t.Errorf("Update keeping own name: %v", err)
+	}
+}
+
 func TestGeoObjectStore_List(t *testing.T) {
 	t.Parallel()
 
@@ -365,7 +397,7 @@ func TestGeoObjectStore_ExternalIDListAndDelete(t *testing.T) {
 		t.Fatalf("List by prefix = (%+v, %v), want only %s", listed, err, synced.ID)
 	}
 
-	duplicate := GeoObject{Name: "Dup", Group: "g", StreetID: f.streetA, ExternalID: &externalID}
+	duplicate := GeoObject{Name: "Dup", Group: "sync-" + f.tag, StreetID: f.streetA, ExternalID: &externalID}
 	if _, err := f.geoObjects.Create(t.Context(), duplicate); !errors.Is(err, ErrExternalIDTaken) {
 		t.Errorf("Create with taken external ID = %v, want ErrExternalIDTaken", err)
 	}

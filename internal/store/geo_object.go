@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 // GeoObject is a named, grouped point at a street and optionally one of its
 // house numbers. Its coordinates are its own and need not match those of the
-// street or house number.
+// street or house number. Its name is unique within its group.
 type GeoObject struct {
 	ID   uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Name string    `json:"name" gorm:"not null"`
@@ -80,7 +81,35 @@ var (
 	// ErrExternalIDTaken is returned when a geo object's external ID is
 	// already used by another geo object.
 	ErrExternalIDTaken = errors.New("externalId is already used by another geo object")
+
+	// ErrNameTaken is returned when another geo object in the same group
+	// already has the geo object's name.
+	ErrNameTaken = errors.New("name is already used by another geo object in this group")
 )
+
+// Names of the unique indexes on geo_objects, created by Migrate.
+const (
+	geoObjectsExternalIDKey = "geo_objects_external_id_key"
+	geoObjectsGroupNameKey  = "geo_objects_group_name_name_key"
+)
+
+// geoObjectWriteError maps a constraint violation from writing a geo object
+// to the matching domain error and returns other errors unchanged.
+func geoObjectWriteError(err error) error {
+	switch {
+	case errors.Is(err, gorm.ErrForeignKeyViolated):
+		return ErrStreetNotFound
+	case errors.Is(err, gorm.ErrDuplicatedKey):
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.ConstraintName == geoObjectsGroupNameKey {
+			return ErrNameTaken
+		}
+
+		return ErrExternalIDTaken
+	}
+
+	return err
+}
 
 // GeoObjectStore reads and writes geo objects.
 type GeoObjectStore struct {
@@ -94,23 +123,15 @@ func NewGeoObjectStore(db *gorm.DB) *GeoObjectStore {
 
 // Create inserts g and returns it with its generated ID. It returns
 // ErrStreetNotFound, ErrHouseNumberNotFound or ErrHouseNumberNotOnStreet if
-// the references are invalid.
+// the references are invalid, and ErrNameTaken or ErrExternalIDTaken if
+// another geo object already has g's name in its group or g's external ID.
 func (st *GeoObjectStore) Create(ctx context.Context, g GeoObject) (GeoObject, error) {
 	err := st.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := checkHouseNumberOnStreet(tx, g); err != nil {
 			return err
 		}
 
-		err := tx.Create(&g).Error
-
-		switch {
-		case errors.Is(err, gorm.ErrForeignKeyViolated):
-			return ErrStreetNotFound
-		case errors.Is(err, gorm.ErrDuplicatedKey):
-			return ErrExternalIDTaken
-		}
-
-		return err
+		return geoObjectWriteError(tx.Create(&g).Error)
 	})
 	if err != nil {
 		return GeoObject{}, err
@@ -182,9 +203,8 @@ func (st *GeoObjectStore) Get(ctx context.Context, id uuid.UUID) (GeoObject, err
 }
 
 // Update replaces the geo object with the given ID. A nil ExternalID keeps
-// the stored one. It returns ErrNotFound if it does not exist,
-// ErrExternalIDTaken if another object has g's ExternalID, and the same
-// reference errors as Create.
+// the stored one. It returns ErrNotFound if it does not exist, and the same
+// reference and conflict errors as Create.
 func (st *GeoObjectStore) Update(ctx context.Context, id uuid.UUID, g GeoObject) (GeoObject, error) {
 	g.ID = id
 
@@ -199,12 +219,8 @@ func (st *GeoObjectStore) Update(ctx context.Context, id uuid.UUID, g GeoObject)
 		}
 
 		res := tx.Model(&g).Select("*").Omit(omitted...).Updates(&g)
-
-		switch {
-		case errors.Is(res.Error, gorm.ErrForeignKeyViolated):
-			return ErrStreetNotFound
-		case errors.Is(res.Error, gorm.ErrDuplicatedKey):
-			return ErrExternalIDTaken
+		if res.Error != nil {
+			return geoObjectWriteError(res.Error)
 		}
 
 		if err := requireOneRow(res); err != nil {
@@ -232,7 +248,8 @@ func (st *GeoObjectStore) GetByExternalID(ctx context.Context, externalID string
 
 // UpsertByExternalID creates the geo object with the given external ID, or
 // replaces it if it exists, keeping its ID. It reports whether the object was
-// created and returns the same reference errors as Create.
+// created and returns the same reference errors as Create, and ErrNameTaken
+// if another geo object already has g's name in its group.
 func (st *GeoObjectStore) UpsertByExternalID(
 	ctx context.Context,
 	externalID string,
@@ -263,11 +280,7 @@ func (st *GeoObjectStore) UpsertByExternalID(
 			err = tx.Model(&g).Select("*").Omit("id").Updates(&g).Error
 		}
 
-		if errors.Is(err, gorm.ErrForeignKeyViolated) {
-			return ErrStreetNotFound
-		}
-
-		return err
+		return geoObjectWriteError(err)
 	})
 	if err != nil {
 		return GeoObject{}, false, err

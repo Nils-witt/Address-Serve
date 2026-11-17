@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -38,9 +39,58 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 	}
 
 	// Lets other systems address their geo objects by GeoObject.ExternalID.
-	err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS geo_objects_external_id_key ON geo_objects (external_id) WHERE external_id IS NOT NULL").Error
+	err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS " + geoObjectsExternalIDKey + " ON geo_objects (external_id) WHERE external_id IS NOT NULL").Error
 	if err != nil {
-		return fmt.Errorf("create geo_objects_external_id_key: %w", err)
+		return fmt.Errorf("create %s: %w", geoObjectsExternalIDKey, err)
+	}
+
+	return migrateGeoObjectGroupNameKey(db)
+}
+
+// migrateGeoObjectGroupNameKey makes geo object names unique per group. The
+// index leads with group_name, so it also serves lookups by group.
+//
+// Databases from before this rule may hold duplicates, which would make the
+// index fail with a terse error; those are reported by name instead, to be
+// renamed or deleted by hand before the next start.
+func migrateGeoObjectGroupNameKey(db *gorm.DB) error {
+	var exists bool
+
+	err := db.Raw("SELECT to_regclass(?) IS NOT NULL", geoObjectsGroupNameKey).Scan(&exists).Error
+	if err != nil {
+		return fmt.Errorf("look up %s: %w", geoObjectsGroupNameKey, err)
+	}
+
+	if exists {
+		return nil
+	}
+
+	var duplicates []struct {
+		GroupName string
+		Name      string
+		Count     int
+	}
+
+	err = db.Raw(`SELECT group_name, name, count(*) AS count FROM geo_objects
+		GROUP BY group_name, name HAVING count(*) > 1
+		ORDER BY group_name, name LIMIT 10`).Scan(&duplicates).Error
+	if err != nil {
+		return fmt.Errorf("find duplicate geo object names: %w", err)
+	}
+
+	if len(duplicates) > 0 {
+		names := make([]string, len(duplicates))
+		for i, d := range duplicates {
+			names[i] = fmt.Sprintf("%q in group %q (%d times)", d.Name, d.GroupName, d.Count)
+		}
+
+		return fmt.Errorf("geo object names must be unique per group, but these are not (first %d shown): %s",
+			len(names), strings.Join(names, ", "))
+	}
+
+	err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS " + geoObjectsGroupNameKey + " ON geo_objects (group_name, name)").Error
+	if err != nil {
+		return fmt.Errorf("create %s: %w", geoObjectsGroupNameKey, err)
 	}
 
 	return nil
