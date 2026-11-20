@@ -19,7 +19,8 @@
     "apiTokens": "API tokens",
     "logout": "Logout",
     "openNavMenu": "Open navigation menu",
-    "geoObjects": "Geo objects"
+    "geoObjects": "Geo objects",
+    "collectors": "Collectors"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -144,5 +145,75 @@
     "revoke": "Revoke",
     "revokeTitle": "Revoke token?",
     "revokeMessage": "Revoke the token \"{{name}}\"? Programs using it will lose access immediately."
+  },
+  "collectors": {
+    "title": "Collectors",
+    "intro": "Collectors are programs that feed streets, house numbers and geo objects into the service in runs. Each one authenticates with its own token.",
+    "newCollector": "New collector",
+    "newTitle": "New collector",
+    "editTitle": "Edit collector",
+    "createdTitle": "Collector created",
+    "rotatedTitle": "New token",
+    "name": "Name",
+    "nameHelp": "A unique name, e.g. \"Bonn Stadtplan\".",
+    "description": "Description",
+    "expectedInterval": "Expected interval",
+    "expectedIntervalHelp": "How often the collector should complete a run. It is marked stale once its last success is twice as old.",
+    "noInterval": "None",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "hours_one": "every hour",
+    "hours_other": "every {{count}} hours",
+    "days_one": "daily",
+    "days_other": "every {{count}} days",
+    "status": "Status",
+    "statuses": {
+      "never": "No runs",
+      "running": "Running",
+      "ok": "OK",
+      "stale": "Stale",
+      "failed": "Failed"
+    },
+    "statusHelp": {
+      "never": "The collector has not started a run yet.",
+      "running": "A run is in progress.",
+      "ok": "The last run succeeded.",
+      "stale": "The last successful run is older than twice the expected interval.",
+      "failed": "The last run failed, or a run stopped sending for 30 minutes."
+    },
+    "lastRun": "Last run",
+    "lastSeen": "Last contact",
+    "neverSeen": "Never",
+    "noRuns": "No runs yet",
+    "runs": "Run history",
+    "runsTitle": "Runs of {{name}}",
+    "started": "Started",
+    "finished": "Finished",
+    "mode": "Mode",
+    "modes": {
+      "incremental": "incremental",
+      "full": "full sync"
+    },
+    "state": "Result",
+    "states": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed"
+    },
+    "written": "Written",
+    "countStreets_one": "{{formatted}} street",
+    "countStreets_other": "{{formatted}} streets",
+    "countHouseNumbers_one": "{{formatted}} house number",
+    "countHouseNumbers_other": "{{formatted}} house numbers",
+    "countGeoObjects_one": "{{formatted}} geo object",
+    "countGeoObjects_other": "{{formatted}} geo objects",
+    "countDeleted_one": "{{formatted}} deleted",
+    "countDeleted_other": "{{formatted}} deleted",
+    "empty": "No collectors are registered yet.",
+    "rotateToken": "New token",
+    "rotateTitle": "Replace token?",
+    "rotateMessage": "Create a new token for \"{{name}}\"? Its current token stops working immediately.",
+    "deleteTitle": "Delete collector?",
+    "deleteMessage": "Delete \"{{name}}\" and its token? The data it wrote stays, but no longer belongs to any collector."
   }
 }

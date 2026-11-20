@@ -104,6 +104,51 @@ export interface CreatedAPIToken extends APIToken {
   token: string;
 }
 
+export type RunMode = 'incremental' | 'full';
+export type RunState = 'running' | 'succeeded' | 'failed';
+
+/** never: no run yet. running: a run is open and the collector was in
+ * contact within 30 minutes. failed: the last run failed or was abandoned.
+ * stale: the last success is older than twice the expected interval. */
+export type CollectorStatus = 'never' | 'running' | 'ok' | 'failed' | 'stale';
+
+export interface CollectorInput {
+  name: string;
+  description: string;
+  /** Null when the collector is never considered stale. */
+  expectedIntervalMinutes: number | null;
+}
+
+export interface CollectorRun {
+  id: string;
+  collectorId: string;
+  mode: RunMode;
+  state: RunState;
+  startedAt: string;
+  finishedAt: string | null;
+  /** Rows written in the run. */
+  streets: number;
+  houseNumbers: number;
+  geoObjects: number;
+  /** Rows a successful full run deleted because it no longer sent them. */
+  deleted: number;
+  error?: string;
+}
+
+export interface Collector extends CollectorInput {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  lastSuccessAt: string | null;
+  status: CollectorStatus;
+  lastRun: CollectorRun | null;
+}
+
+/** POST /api/collectors: the only response that carries the token secret. */
+export interface CreatedCollector extends Collector {
+  token: string;
+}
+
 /** GET /ui-config: served before sign-in. */
 export interface UIConfig {
   oidc: {

@@ -11,7 +11,11 @@
 import type {
   APIToken,
   APITokenInput,
+  Collector,
+  CollectorInput,
+  CollectorRun,
   CreatedAPIToken,
+  CreatedCollector,
   District,
   GeoObject,
   GeoObjectFilter,
@@ -231,5 +235,41 @@ export class ApiClient {
 
   deleteAPIToken(id: string): Promise<void> {
     return this.del(`/api/tokens/${encodeURIComponent(id)}`);
+  }
+
+  // ---- collectors --------------------------------------------------------
+
+  listCollectors(): Promise<Collector[]> {
+    return this.getJson('/api/collectors');
+  }
+
+  /** The returned token secret can't be fetched again. */
+  createCollector(input: CollectorInput): Promise<CreatedCollector> {
+    return this.sendJsonForJson('/api/collectors', 'POST', input);
+  }
+
+  updateCollector(id: string, input: CollectorInput): Promise<Collector> {
+    return this.sendJsonForJson(`/api/collectors/${encodeURIComponent(id)}`, 'PUT', input);
+  }
+
+  /** Also revokes its token; the data it wrote stays. */
+  deleteCollector(id: string): Promise<void> {
+    return this.del(`/api/collectors/${encodeURIComponent(id)}`);
+  }
+
+  /** Resolves to the new secret; the old one stops working at once. */
+  async rotateCollectorToken(id: string): Promise<string> {
+    const { token } = await this.sendJsonForJson<{ token: string }>(
+      `/api/collectors/${encodeURIComponent(id)}/token`,
+      'POST',
+      {},
+    );
+    return token;
+  }
+
+  listCollectorRuns(id: string): Promise<CollectorRun[]> {
+    return this.getJson(
+      withQuery(`/api/collectors/${encodeURIComponent(id)}/runs`, { limit: '50' }),
+    );
   }
 }

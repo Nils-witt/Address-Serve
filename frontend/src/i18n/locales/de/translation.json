@@ -19,7 +19,8 @@
     "apiTokens": "API-Tokens",
     "logout": "Abmelden",
     "openNavMenu": "Navigationsmenü öffnen",
-    "geoObjects": "Geo-Objekte"
+    "geoObjects": "Geo-Objekte",
+    "collectors": "Collectoren"
   },
   "auth": {
     "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an."
@@ -144,5 +145,75 @@
     "revoke": "Widerrufen",
     "revokeTitle": "Token widerrufen?",
     "revokeMessage": "Den Token \"{{name}}\" widerrufen? Programme, die ihn nutzen, verlieren sofort den Zugriff."
+  },
+  "collectors": {
+    "title": "Collectoren",
+    "intro": "Collectoren sind Programme, die Straßen, Hausnummern und Geo-Objekte in Läufen einspielen. Jeder meldet sich mit einem eigenen Token an.",
+    "newCollector": "Neuer Collector",
+    "newTitle": "Neuer Collector",
+    "editTitle": "Collector bearbeiten",
+    "createdTitle": "Collector angelegt",
+    "rotatedTitle": "Neues Token",
+    "name": "Name",
+    "nameHelp": "Ein eindeutiger Name, z. B. „Bonn Stadtplan“.",
+    "description": "Beschreibung",
+    "expectedInterval": "Erwartetes Intervall",
+    "expectedIntervalHelp": "Wie oft der Collector einen Lauf abschließen soll. Ist sein letzter Erfolg doppelt so alt, gilt er als veraltet.",
+    "noInterval": "Keins",
+    "minutes_one": "{{count}} Minute",
+    "minutes_other": "{{count}} Minuten",
+    "hours_one": "stündlich",
+    "hours_other": "alle {{count}} Stunden",
+    "days_one": "täglich",
+    "days_other": "alle {{count}} Tage",
+    "status": "Status",
+    "statuses": {
+      "never": "Keine Läufe",
+      "running": "Läuft",
+      "ok": "OK",
+      "stale": "Veraltet",
+      "failed": "Fehlgeschlagen"
+    },
+    "statusHelp": {
+      "never": "Der Collector hat noch keinen Lauf gestartet.",
+      "running": "Ein Lauf ist im Gange.",
+      "ok": "Der letzte Lauf war erfolgreich.",
+      "stale": "Der letzte erfolgreiche Lauf ist älter als das doppelte erwartete Intervall.",
+      "failed": "Der letzte Lauf ist fehlgeschlagen, oder ein Lauf hat sich 30 Minuten nicht gemeldet."
+    },
+    "lastRun": "Letzter Lauf",
+    "lastSeen": "Letzter Kontakt",
+    "neverSeen": "Nie",
+    "noRuns": "Noch keine Läufe",
+    "runs": "Laufhistorie",
+    "runsTitle": "Läufe von {{name}}",
+    "started": "Gestartet",
+    "finished": "Beendet",
+    "mode": "Modus",
+    "modes": {
+      "incremental": "inkrementell",
+      "full": "Vollabgleich"
+    },
+    "state": "Ergebnis",
+    "states": {
+      "running": "Läuft",
+      "succeeded": "Erfolgreich",
+      "failed": "Fehlgeschlagen"
+    },
+    "written": "Geschrieben",
+    "countStreets_one": "{{formatted}} Straße",
+    "countStreets_other": "{{formatted}} Straßen",
+    "countHouseNumbers_one": "{{formatted}} Hausnummer",
+    "countHouseNumbers_other": "{{formatted}} Hausnummern",
+    "countGeoObjects_one": "{{formatted}} Geo-Objekt",
+    "countGeoObjects_other": "{{formatted}} Geo-Objekte",
+    "countDeleted_one": "{{formatted}} gelöscht",
+    "countDeleted_other": "{{formatted}} gelöscht",
+    "empty": "Es ist noch kein Collector registriert.",
+    "rotateToken": "Neues Token",
+    "rotateTitle": "Token ersetzen?",
+    "rotateMessage": "Ein neues Token für „{{name}}“ erstellen? Das bisherige Token funktioniert sofort nicht mehr.",
+    "deleteTitle": "Collector löschen?",
+    "deleteMessage": "„{{name}}“ und sein Token löschen? Die geschriebenen Daten bleiben, gehören aber keinem Collector mehr."
   }
 }

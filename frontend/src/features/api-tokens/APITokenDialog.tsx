@@ -1,20 +1,10 @@
 import { type SubmitEvent, useState } from 'react';
-import {
-  Alert,
-  Button,
-  IconButton,
-  InputAdornment,
-  MenuItem,
-  Stack,
-  TextField,
-  Tooltip,
-} from '@mui/material';
-import CheckIcon from '@mui/icons-material/Check';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { Button, MenuItem, Stack, TextField } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { APITokenInput, CreatedAPIToken } from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
+import TokenSecret from '../../components/TokenSecret';
 import { errorMessage } from '../../lib/errors';
 import './APITokenDialog.scss';
 
@@ -90,58 +80,6 @@ function TokenForm({
   );
 }
 
-function CreatedToken({ token, onClose }: { token: CreatedAPIToken; onClose: () => void }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(token.token);
-      setCopied(true);
-    } catch {
-      setCopyFailed(true);
-    }
-  };
-
-  return (
-    <Stack spacing={3} className="api-token-dialog__body">
-      <Alert severity="warning">{t('apiTokens.copyNow')}</Alert>
-      <TextField
-        label={token.name}
-        size="small"
-        value={token.token}
-        error={copyFailed}
-        helperText={copyFailed ? t('apiTokens.copyFailed') : undefined}
-        slotProps={{
-          htmlInput: { readOnly: true, className: 'api-token-dialog__secret' },
-          input: {
-            endAdornment: (
-              <InputAdornment position="end">
-                <Tooltip title={copied ? t('apiTokens.copied') : t('apiTokens.copy')}>
-                  <IconButton
-                    aria-label={t('apiTokens.copy')}
-                    onClick={() => void copy()}
-                    edge="end"
-                  >
-                    {copied ? <CheckIcon /> : <ContentCopyIcon />}
-                  </IconButton>
-                </Tooltip>
-              </InputAdornment>
-            ),
-          },
-        }}
-        onFocus={(e) => e.target.select()}
-      />
-      <Stack direction="row" className="api-token-dialog__actions">
-        <Button variant="contained" onClick={onClose}>
-          {t('apiTokens.done')}
-        </Button>
-      </Stack>
-    </Stack>
-  );
-}
-
 /** Creates an API token, then shows its secret once. Give it a new `key` for
  * each opening, so it starts over at the form and the last secret is dropped,
  * while a closing dialog keeps showing what it showed. */
@@ -164,7 +102,7 @@ export default function APITokenDialog({
       onClose={onClose}
     >
       {created ? (
-        <CreatedToken token={created} onClose={onClose} />
+        <TokenSecret label={created.name} secret={created.token} onClose={onClose} />
       ) : (
         <TokenForm
           onClose={onClose}

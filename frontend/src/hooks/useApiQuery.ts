@@ -10,6 +10,8 @@ export interface ApiQueryOptions<T> {
   /** For data behind a dialog that is edited from what it shows: always
    * refetched when opened and dropped when closed, never served from the cache. */
   fresh?: boolean;
+  /** Refetch this often (ms) while the query is in use, for live status. */
+  refetchInterval?: number;
 }
 
 export interface ApiQueryResult<T> {
@@ -27,13 +29,14 @@ export interface ApiQueryResult<T> {
  * `{ data, error, loading, reload }` shape the components already use. Pass a
  * module-level constant as `empty` so its identity stays stable. */
 export function useApiQuery<T>(
-  { queryKey, queryFn, enabled = true, fresh = false }: ApiQueryOptions<T>,
+  { queryKey, queryFn, enabled = true, fresh = false, refetchInterval }: ApiQueryOptions<T>,
   empty: T,
 ): ApiQueryResult<T> {
   const { data, error, isPending, refetch } = useQuery({
     queryKey,
     queryFn,
     enabled,
+    refetchInterval,
     ...(fresh ? { staleTime: 0, gcTime: 0 } : {}),
   });
   const reload = useCallback(async () => {
