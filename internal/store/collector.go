@@ -94,9 +94,10 @@ type Collector struct {
 	LastRun *CollectorRun   `json:"lastRun" gorm:"-"`
 
 	// The slices below are never loaded; they declare the foreign keys to
-	// collectors. Deleting a collector deletes its runs and keeps the data it
-	// wrote, which no longer belongs to any collector.
+	// collectors. Deleting a collector deletes its runs and token, and keeps
+	// the data it wrote, which no longer belongs to any collector.
 	Runs         []CollectorRun `json:"-" gorm:"constraint:OnDelete:CASCADE"`
+	APITokens    []APIToken     `json:"-" gorm:"constraint:OnDelete:CASCADE"`
 	Streets      []Street       `json:"-" gorm:"constraint:OnDelete:SET NULL"`
 	HouseNumbers []HouseNumber  `json:"-" gorm:"constraint:OnDelete:SET NULL"`
 	GeoObjects   []GeoObject    `json:"-" gorm:"constraint:OnDelete:SET NULL"`
@@ -216,9 +217,11 @@ func NewCollectorStore(db *gorm.DB) *CollectorStore {
 	return &CollectorStore{db: db}
 }
 
-// Create inserts a collector owned by ownerSub. It returns
-// ErrCollectorNameTaken if the name is in use.
-func (st *CollectorStore) Create(ctx context.Context, ownerSub string, in CollectorInput) (Collector, error) {
+// Create inserts a collector owned by the given user, together with the API
+// token it authenticates with. It returns the collector and the token secret,
+// which can't be recovered later, or ErrCollectorNameTaken if the name is in
+// use.
+func (st *CollectorStore) Create(ctx context.Context, ownerSub, ownerName string, in CollectorInput) (Collector, string, error) {
 	in = in.normalized()
 	c := Collector{
 		Name:                    in.Name,
@@ -228,18 +231,72 @@ func (st *CollectorStore) Create(ctx context.Context, ownerSub string, in Collec
 		CreatedAt:               time.Now().UTC(),
 	}
 
-	err := st.db.WithContext(ctx).Create(&c).Error
+	var secret string
+
+	err := st.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&c).Error; err != nil {
+			return err
+		}
+
+		var err error
+
+		secret, err = createCollectorToken(tx, c, ownerSub, ownerName)
+
+		return err
+	})
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
-		return Collector{}, ErrCollectorNameTaken
+		return Collector{}, "", ErrCollectorNameTaken
 	}
 
 	if err != nil {
-		return Collector{}, err
+		return Collector{}, "", err
 	}
 
 	c.Status = collectorStatus(c, time.Now())
 
-	return c, nil
+	return c, secret, nil
+}
+
+// createCollectorToken stores a new API token for c, owned by the given user,
+// and returns its secret.
+func createCollectorToken(tx *gorm.DB, c Collector, ownerSub, ownerName string) (string, error) {
+	t, secret, err := newAPIToken(ownerSub, ownerName, "collector "+c.Name, nil)
+	if err != nil {
+		return "", err
+	}
+
+	t.CollectorID = &c.ID
+
+	if err := tx.Create(&t).Error; err != nil {
+		return "", fmt.Errorf("create collector token: %w", err)
+	}
+
+	return secret, nil
+}
+
+// RotateToken replaces the API token of the collector with the given ID by a
+// new one, owned by the given user, and returns its secret. The old token
+// stops working at once. It returns ErrNotFound if there is no such
+// collector.
+func (st *CollectorStore) RotateToken(ctx context.Context, id uuid.UUID, ownerSub, ownerName string) (string, error) {
+	var secret string
+
+	err := st.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		c, err := lockCollector(tx, id)
+		if err != nil {
+			return err
+		}
+
+		if err := tx.Delete(&APIToken{}, "collector_id = ?", id).Error; err != nil {
+			return fmt.Errorf("delete old collector token: %w", err)
+		}
+
+		secret, err = createCollectorToken(tx, c, ownerSub, ownerName)
+
+		return err
+	})
+
+	return secret, err
 }
 
 // List returns every collector with its status and last run, ordered by

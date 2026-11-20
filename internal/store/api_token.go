@@ -38,6 +38,10 @@ type APIToken struct {
 	CreatedAt  time.Time  `json:"createdAt" gorm:"not null"`
 	ExpiresAt  *time.Time `json:"expiresAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt"`
+	// CollectorID is set on the one token of a collector, which the
+	// collector authenticates with. Such tokens are managed through their
+	// collector, not listed among their owner's tokens.
+	CollectorID *uuid.UUID `json:"-" gorm:"type:uuid;uniqueIndex:api_tokens_collector_id_key"`
 }
 
 // Expired reports whether t has an expiry at or before now.
@@ -61,6 +65,20 @@ func NewAPITokenStore(db *gorm.DB) *APITokenStore {
 // Create generates a new token for the given owner and stores its hash. It
 // returns the stored token and the secret, which can't be recovered later.
 func (st *APITokenStore) Create(ctx context.Context, ownerSub, ownerName, name string, expiresAt *time.Time) (APIToken, string, error) {
+	t, secret, err := newAPIToken(ownerSub, ownerName, name, expiresAt)
+	if err != nil {
+		return APIToken{}, "", err
+	}
+
+	if err := st.db.WithContext(ctx).Create(&t).Error; err != nil {
+		return APIToken{}, "", err
+	}
+
+	return t, secret, nil
+}
+
+// newAPIToken returns an unsaved token with a fresh secret, and the secret.
+func newAPIToken(ownerSub, ownerName, name string, expiresAt *time.Time) (APIToken, string, error) {
 	secret, err := newAPITokenSecret()
 	if err != nil {
 		return APIToken{}, "", err
@@ -76,25 +94,25 @@ func (st *APITokenStore) Create(ctx context.Context, ownerSub, ownerName, name s
 		ExpiresAt: expiresAt,
 	}
 
-	if err := st.db.WithContext(ctx).Create(&t).Error; err != nil {
-		return APIToken{}, "", err
-	}
-
 	return t, secret, nil
 }
 
-// List returns the tokens of ownerSub, newest first.
+// List returns the tokens of ownerSub, newest first, leaving out collector
+// tokens.
 func (st *APITokenStore) List(ctx context.Context, ownerSub string) ([]APIToken, error) {
 	tokens := []APIToken{}
-	err := st.db.WithContext(ctx).Where("owner_sub = ?", ownerSub).Order("created_at DESC").Find(&tokens).Error
+	err := st.db.WithContext(ctx).Where("owner_sub = ? AND collector_id IS NULL", ownerSub).Order("created_at DESC").Find(&tokens).Error
 
 	return tokens, err
 }
 
-// Delete removes the token with the given ID if it belongs to ownerSub. It
-// returns ErrNotFound otherwise, so one user can't probe another's token IDs.
+// Delete removes the token with the given ID if it belongs to ownerSub and is
+// not a collector token. It returns ErrNotFound otherwise, so one user can't
+// probe another's token IDs.
 func (st *APITokenStore) Delete(ctx context.Context, ownerSub string, id uuid.UUID) error {
-	return requireOneRow(st.db.WithContext(ctx).Delete(&APIToken{}, "id = ? AND owner_sub = ?", id, ownerSub))
+	res := st.db.WithContext(ctx).Delete(&APIToken{}, "id = ? AND owner_sub = ? AND collector_id IS NULL", id, ownerSub)
+
+	return requireOneRow(res)
 }
 
 // Authenticate returns the stored token matching secret, or
@@ -125,6 +143,11 @@ func (st *APITokenStore) Authenticate(ctx context.Context, secret string) (APITo
 		// Bookkeeping only: a failed write must not reject a valid token.
 		if err := st.db.WithContext(ctx).Model(&t).Update("last_used_at", now).Error; err == nil {
 			t.LastUsedAt = &now
+		}
+
+		// Any request of a collector counts as contact from it.
+		if t.CollectorID != nil {
+			_ = st.db.WithContext(ctx).Model(&Collector{}).Where("id = ?", *t.CollectorID).Update("last_seen_at", now).Error
 		}
 	}
 

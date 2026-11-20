@@ -150,7 +150,11 @@ func wantErrorIs(t *testing.T, what string, err, target error) {
 func createCollector(t *testing.T, cs *CollectorStore) Collector {
 	t.Helper()
 
-	c := must(cs.Create(t.Context(), "owner", CollectorInput{Name: "collector " + uuid.NewString()}))(t)
+	c, _, err := cs.Create(t.Context(), "owner", "Owner", CollectorInput{Name: "collector " + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	t.Cleanup(func() { _ = cs.Delete(context.Background(), c.ID) })
 
 	return c
@@ -167,7 +171,7 @@ func TestCollectorStore_CRUD(t *testing.T) {
 		t.Fatalf("new collector status = %q, want never", c.Status)
 	}
 
-	_, err := cs.Create(t.Context(), "owner", CollectorInput{Name: c.Name})
+	_, _, err := cs.Create(t.Context(), "owner", "Owner", CollectorInput{Name: c.Name})
 	wantErrorIs(t, "Create with taken name", err, ErrCollectorNameTaken)
 
 	hourly := 60
@@ -417,4 +421,50 @@ func TestCollectorStore_PrunesRuns(t *testing.T) {
 	if runs := must(cs.ListRuns(t.Context(), c.ID, 1000))(t); len(runs) != maxRunsPerCollector {
 		t.Fatalf("kept %d runs, want %d", len(runs), maxRunsPerCollector)
 	}
+}
+
+func TestCollectorStore_Token(t *testing.T) {
+	t.Parallel()
+
+	db := openBenchDB(t)
+	cs := NewCollectorStore(db)
+	tokens := NewAPITokenStore(db)
+	owner := "owner-" + uuid.NewString()
+
+	c, secret, err := cs.Create(t.Context(), owner, "Owner", CollectorInput{Name: "collector " + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = cs.Delete(context.Background(), c.ID) })
+
+	token := must(tokens.Authenticate(t.Context(), secret))(t)
+	if token.CollectorID == nil || *token.CollectorID != c.ID {
+		t.Fatalf("collector token has collector %v, want %s", token.CollectorID, c.ID)
+	}
+
+	if seen := must(cs.Get(t.Context(), c.ID))(t); seen.LastSeenAt == nil {
+		t.Fatal("authenticating did not record contact from the collector")
+	}
+
+	if list := must(tokens.List(t.Context(), owner))(t); len(list) != 0 {
+		t.Fatalf("owner's token list = %+v, want collector token left out", list)
+	}
+
+	wantErrorIs(t, "Delete as a personal token", tokens.Delete(t.Context(), owner, token.ID), ErrNotFound)
+
+	rotated := must(cs.RotateToken(t.Context(), c.ID, owner, "Owner"))(t)
+
+	_, err = tokens.Authenticate(t.Context(), secret)
+	wantErrorIs(t, "old secret after rotation", err, ErrInvalidAPIToken)
+
+	must(tokens.Authenticate(t.Context(), rotated))(t)
+
+	_, err = cs.RotateToken(t.Context(), uuid.New(), owner, "Owner")
+	wantErrorIs(t, "RotateToken of unknown collector", err, ErrNotFound)
+
+	wantErrorIs(t, "Delete", cs.Delete(t.Context(), c.ID), nil)
+
+	_, err = tokens.Authenticate(t.Context(), rotated)
+	wantErrorIs(t, "secret of deleted collector", err, ErrInvalidAPIToken)
 }
