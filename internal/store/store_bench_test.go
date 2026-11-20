@@ -60,7 +60,7 @@ func seedBenchDB(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err := db.Exec("DROP TABLE IF EXISTS geo_objects, house_numbers, streets CASCADE").Error; err != nil {
+	if err := db.Exec("DROP TABLE IF EXISTS geo_objects, house_numbers, streets, collector_runs, collectors CASCADE").Error; err != nil {
 		return nil, err
 	}
 
@@ -182,11 +182,15 @@ func BenchmarkStreetUpdate(b *testing.B) {
 func BenchmarkHouseNumberCreate(b *testing.B) {
 	db := openBenchDB(b)
 	hs := NewHouseNumberStore(db)
-	h := HouseNumber{StreetID: benchStreet.ID, Number: 999, Postcode: "53111", Latitude: 50.7, Longitude: 7.1}
+	// Numbers start above the seeded ones, as each must be new on the street.
+	const firstNumber = 100000
 
-	b.Cleanup(func() { db.Where("number = 999").Delete(&HouseNumber{}) })
+	h := HouseNumber{StreetID: benchStreet.ID, Postcode: "53111", Latitude: 50.7, Longitude: 7.1}
+
+	b.Cleanup(func() { db.Where("street_id = ? AND number >= ?", benchStreet.ID, firstNumber).Delete(&HouseNumber{}) })
 
 	for b.Loop() {
+		h.Number = firstNumber + int(benchSeq.Add(1))
 		if _, err := hs.Create(b.Context(), h); err != nil {
 			b.Fatal(err)
 		}

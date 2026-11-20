@@ -56,13 +56,38 @@ func (s BulkStreetInput) Validate() error {
 		return err
 	}
 
+	seen := make(map[houseNumberKey]int, len(s.HouseNumbers))
+
 	for i, h := range s.HouseNumbers {
 		if err := h.Validate(); err != nil {
 			return fmt.Errorf("houseNumbers[%d]: %w", i, err)
 		}
+
+		key := h.key()
+		if j, dup := seen[key]; dup {
+			return fmt.Errorf("houseNumbers[%d]: same number and addition as houseNumbers[%d]", i, j)
+		}
+
+		seen[key] = i
 	}
 
 	return nil
+}
+
+// houseNumberKey identifies a house number within its street, as the
+// house_numbers_street_number_addition_key index does.
+type houseNumberKey struct {
+	number   int
+	addition string
+}
+
+func (h BulkHouseNumberInput) key() houseNumberKey {
+	k := houseNumberKey{number: h.Number}
+	if h.NumberAddition != nil {
+		k.addition = *h.NumberAddition
+	}
+
+	return k
 }
 
 // BulkResult is a created street and its created house numbers.
@@ -120,7 +145,7 @@ func (bs *BulkStore) Create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 		}
 
 		if err := tx.CreateInBatches(&houseNumbers, insertBatchSize).Error; err != nil {
-			return fmt.Errorf("houseNumbers: %w", err)
+			return fmt.Errorf("houseNumbers: %w", houseNumberWriteError(err))
 		}
 
 		return nil

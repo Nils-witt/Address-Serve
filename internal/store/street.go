@@ -18,6 +18,12 @@ type Street struct {
 	Latitude  float64   `json:"latitude" gorm:"type:double precision;not null"`
 	Longitude float64   `json:"longitude" gorm:"type:double precision;not null"`
 
+	// CollectorID and LastRunID name the collector that last wrote the row
+	// and the run it did so in; full runs use them to find the data they no
+	// longer send (see CollectorStore.FinishRun). Other writes keep them.
+	CollectorID *uuid.UUID `json:"-" gorm:"type:uuid;index"`
+	LastRunID   *uuid.UUID `json:"-" gorm:"type:uuid"`
+
 	// HouseNumbers is never loaded; it only declares the foreign key from
 	// house_numbers so deleting a street cascades to its house numbers.
 	HouseNumbers []HouseNumber `json:"-" gorm:"constraint:OnDelete:CASCADE"`

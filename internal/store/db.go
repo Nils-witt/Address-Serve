@@ -77,11 +77,15 @@ func notFound(err error) error {
 	return err
 }
 
+// collectorColumns are the columns recording which collector last wrote a
+// row. Only collector writes set them; every other update leaves them alone.
+var collectorColumns = []string{"collector_id", "last_run_id"}
+
 // updateRow replaces every column of row except its primary key, which must
-// already be set. A constraint violation matching conflict is mapped to
-// conflictErr and a zero row count to ErrNotFound.
+// already be set, and its collectorColumns. A constraint violation matching
+// conflict is mapped to conflictErr and a zero row count to ErrNotFound.
 func updateRow(ctx context.Context, db *gorm.DB, row any, conflict, conflictErr error) error {
-	res := db.WithContext(ctx).Model(row).Select("*").Omit("id").Updates(row)
+	res := db.WithContext(ctx).Model(row).Select("*").Omit(append([]string{"id"}, collectorColumns...)...).Updates(row)
 	if errors.Is(res.Error, conflict) {
 		return conflictErr
 	}

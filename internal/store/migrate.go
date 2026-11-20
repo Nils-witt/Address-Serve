@@ -22,7 +22,7 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 
-	if err := db.AutoMigrate(&Street{}, &HouseNumber{}, &GeoObject{}, &APIToken{}); err != nil {
+	if err := db.AutoMigrate(&Collector{}, &CollectorRun{}, &Street{}, &HouseNumber{}, &GeoObject{}, &APIToken{}); err != nil {
 		return err
 	}
 
@@ -44,7 +44,11 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("create %s: %w", geoObjectsExternalIDKey, err)
 	}
 
-	return migrateGeoObjectGroupNameKey(db)
+	if err := migrateGeoObjectGroupNameKey(db); err != nil {
+		return err
+	}
+
+	return migrateHouseNumbersKey(db)
 }
 
 // migrateGeoObjectGroupNameKey makes geo object names unique per group. The
@@ -91,6 +95,60 @@ func migrateGeoObjectGroupNameKey(db *gorm.DB) error {
 	err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS " + geoObjectsGroupNameKey + " ON geo_objects (group_name, name)").Error
 	if err != nil {
 		return fmt.Errorf("create %s: %w", geoObjectsGroupNameKey, err)
+	}
+
+	return nil
+}
+
+// migrateHouseNumbersKey makes a house number's number and addition unique
+// per street, so collectors can upsert house numbers by them. A missing
+// addition counts as the empty one.
+//
+// Like migrateGeoObjectGroupNameKey, it reports duplicates from before this
+// rule by name instead of failing on the index, to be removed by hand before
+// the next start.
+func migrateHouseNumbersKey(db *gorm.DB) error {
+	var exists bool
+
+	err := db.Raw("SELECT to_regclass(?) IS NOT NULL", houseNumbersKey).Scan(&exists).Error
+	if err != nil {
+		return fmt.Errorf("look up %s: %w", houseNumbersKey, err)
+	}
+
+	if exists {
+		return nil
+	}
+
+	var duplicates []struct {
+		Street   string
+		City     string
+		Number   int
+		Addition string
+		Count    int
+	}
+
+	err = db.Raw(`SELECT s.name AS street, s.city, h.number, coalesce(h.number_addition, '') AS addition, count(*) AS count
+		FROM house_numbers h JOIN streets s ON s.id = h.street_id
+		GROUP BY s.id, s.name, s.city, h.number, coalesce(h.number_addition, '') HAVING count(*) > 1
+		ORDER BY s.name, s.city, h.number LIMIT 10`).Scan(&duplicates).Error
+	if err != nil {
+		return fmt.Errorf("find duplicate house numbers: %w", err)
+	}
+
+	if len(duplicates) > 0 {
+		names := make([]string, len(duplicates))
+		for i, d := range duplicates {
+			names[i] = fmt.Sprintf("%q %d%s in %q (%d times)", d.Street, d.Number, d.Addition, d.City, d.Count)
+		}
+
+		return fmt.Errorf("house numbers must be unique per street, but these are not (first %d shown): %s",
+			len(names), strings.Join(names, ", "))
+	}
+
+	err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS " + houseNumbersKey +
+		" ON house_numbers (street_id, number, (coalesce(number_addition, '')))").Error
+	if err != nil {
+		return fmt.Errorf("create %s: %w", houseNumbersKey, err)
 	}
 
 	return nil

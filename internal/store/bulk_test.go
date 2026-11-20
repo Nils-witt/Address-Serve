@@ -145,3 +145,24 @@ func TestBulkCreateDuplicate(t *testing.T) {
 		})
 	}
 }
+
+func TestBulkStreetInput_ValidateDuplicateHouseNumbers(t *testing.T) {
+	t.Parallel()
+
+	addition := "a"
+
+	in := bulkStreet("Doppelweg", 1, 2)
+	if err := in.Validate(); err != nil {
+		t.Fatalf("distinct numbers: %v", err)
+	}
+
+	in.HouseNumbers = append(in.HouseNumbers, in.HouseNumbers[0])
+	if err := in.Validate(); err == nil {
+		t.Fatal("repeated number: Validate() = nil, want an error")
+	}
+
+	in.HouseNumbers[2].NumberAddition = &addition
+	if err := in.Validate(); err != nil {
+		t.Fatalf("same number with an addition: %v", err)
+	}
+}

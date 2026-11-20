@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -121,5 +122,31 @@ func TestHouseNumberStore_List(t *testing.T) {
 				t.Errorf("List(%+v) = %v, want %v", tt.filter, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestHouseNumberStore_Duplicate(t *testing.T) {
+	t.Parallel()
+
+	db := openBenchDB(t)
+	street := createBulk(t, db, []BulkStreetInput{bulkStreet("Doppelweg "+uuid.NewString(), 1)})[0].Street
+	hs := NewHouseNumberStore(db)
+	addition := "a"
+
+	h := HouseNumber{StreetID: street.ID, Number: 1, Postcode: "53111", Latitude: 50, Longitude: 7}
+	if _, err := hs.Create(t.Context(), h); !errors.Is(err, ErrHouseNumberAlreadyExists) {
+		t.Fatalf("Create of existing number: err = %v, want ErrHouseNumberAlreadyExists", err)
+	}
+
+	h.NumberAddition = &addition
+
+	withAddition, err := hs.Create(t.Context(), h)
+	if err != nil {
+		t.Fatalf("Create with new addition: %v", err)
+	}
+
+	withAddition.NumberAddition = nil
+	if _, err := hs.Update(t.Context(), withAddition.ID, withAddition); !errors.Is(err, ErrHouseNumberAlreadyExists) {
+		t.Fatalf("Update to existing number: err = %v, want ErrHouseNumberAlreadyExists", err)
 	}
 }

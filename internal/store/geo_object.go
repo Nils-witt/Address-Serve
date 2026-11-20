@@ -28,6 +28,12 @@ type GeoObject struct {
 	// ExternalID, when set, identifies the object in another system that
 	// keeps it in sync, such as a tileserve-go instance. It is unique.
 	ExternalID *string `json:"externalId,omitempty" gorm:"column:external_id"`
+
+	// CollectorID and LastRunID name the collector that last wrote the row
+	// and the run it did so in; full runs use them to find the data they no
+	// longer send (see CollectorStore.FinishRun). Other writes keep them.
+	CollectorID *uuid.UUID `json:"-" gorm:"type:uuid;index"`
+	LastRunID   *uuid.UUID `json:"-" gorm:"type:uuid"`
 }
 
 // maxExternalIDLength bounds GeoObject.ExternalID.
@@ -213,7 +219,7 @@ func (st *GeoObjectStore) Update(ctx context.Context, id uuid.UUID, g GeoObject)
 			return err
 		}
 
-		omitted := []string{"id"}
+		omitted := append([]string{"id"}, collectorColumns...)
 		if g.ExternalID == nil {
 			omitted = append(omitted, "external_id")
 		}
@@ -277,7 +283,7 @@ func (st *GeoObjectStore) UpsertByExternalID(
 			err = tx.Create(&g).Error
 		case err == nil:
 			g.ID = existing.ID
-			err = tx.Model(&g).Select("*").Omit("id").Updates(&g).Error
+			err = tx.Model(&g).Select("*").Omit(append([]string{"id"}, collectorColumns...)...).Updates(&g).Error
 		}
 
 		return geoObjectWriteError(err)
