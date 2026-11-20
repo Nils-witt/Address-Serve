@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -231,7 +232,7 @@ func TestGeoObjectStore_NameUniquePerGroup(t *testing.T) {
 		t.Errorf("Update to taken name = %v, want ErrNameTaken", err)
 	}
 
-	if _, _, err := f.geoObjects.UpsertByExternalID(ctx, "unique:"+f.tag, taken); !errors.Is(err, ErrNameTaken) {
+	if _, _, err := f.geoObjects.UpsertByExternalID(ctx, "unique:"+f.tag, taken, nil); !errors.Is(err, ErrNameTaken) {
 		t.Errorf("UpsertByExternalID with taken name = %v, want ErrNameTaken", err)
 	}
 
@@ -359,14 +360,14 @@ func TestGeoObjectStore_UpsertByExternalID(t *testing.T) {
 	externalID := "test:" + f.tag + ":1"
 	g := GeoObject{Name: "Synced", Group: "sync-" + f.tag, StreetID: f.streetA, Latitude: 50, Longitude: 7}
 
-	created, isNew, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g)
+	created, isNew, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g, nil)
 	if err != nil || !isNew {
 		t.Fatalf("first UpsertByExternalID = (%v, %v), want created", isNew, err)
 	}
 
 	g.Name = "Synced renamed"
 
-	updated, isNew, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g)
+	updated, isNew, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g, nil)
 	if err != nil || isNew || updated.ID != created.ID || updated.Name != g.Name {
 		t.Fatalf("second UpsertByExternalID = (%+v, %v, %v), want update of %s", updated, isNew, err, created.ID)
 	}
@@ -473,5 +474,36 @@ func TestGeoObjectRefs_Validate(t *testing.T) {
 				t.Errorf("Validate() error = %v, expectErr %v", err, tt.expectErr)
 			}
 		})
+	}
+}
+
+func TestGeoObjectStore_UpsertByExternalIDInRun(t *testing.T) {
+	t.Parallel()
+
+	f := newGeoObjectFixture(t)
+	cs := NewCollectorStore(f.db)
+	c := createCollector(t, cs)
+	run := RunRef{CollectorID: c.ID, RunID: must(cs.StartRun(t.Context(), c.ID, RunModeIncremental))(t).ID}
+	externalID := "run:" + f.tag
+	g := GeoObject{Name: "run " + f.tag, Group: f.tag, StreetID: f.streetA, Latitude: 50, Longitude: 7}
+
+	saved, _, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g, &run)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = f.geoObjects.Delete(context.Background(), saved.ID) })
+
+	wantTagged(t, f.db, "geo_objects", saved.ID, run)
+
+	// A write outside the run keeps the tags.
+	if _, _, err := f.geoObjects.UpsertByExternalID(t.Context(), externalID, g, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	wantTagged(t, f.db, "geo_objects", saved.ID, run)
+
+	if runs := must(cs.ListRuns(t.Context(), c.ID, 1))(t); runs[0].GeoObjects != 1 {
+		t.Fatalf("run counts %d geo objects, want 1", runs[0].GeoObjects)
 	}
 }

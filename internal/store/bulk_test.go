@@ -166,3 +166,94 @@ func TestBulkStreetInput_ValidateDuplicateHouseNumbers(t *testing.T) {
 		t.Fatalf("same number with an addition: %v", err)
 	}
 }
+
+// collectorRows reads the collector columns of the row of model with id.
+func collectorRows(t *testing.T, db *gorm.DB, table string, id uuid.UUID) (collectorID, lastRunID *uuid.UUID) {
+	t.Helper()
+
+	var row struct {
+		CollectorID *uuid.UUID
+		LastRunID   *uuid.UUID
+	}
+
+	if err := db.Table(table).Select("collector_id, last_run_id").Where("id = ?", id).Take(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	return row.CollectorID, row.LastRunID
+}
+
+// wantTagged fails t unless the row of table with id was last written in run.
+func wantTagged(t *testing.T, db *gorm.DB, table string, id uuid.UUID, run RunRef) {
+	t.Helper()
+
+	collectorID, lastRunID := collectorRows(t, db, table, id)
+	if collectorID == nil || *collectorID != run.CollectorID || lastRunID == nil || *lastRunID != run.RunID {
+		t.Fatalf("%s %s tagged with collector %v run %v, want %s run %s", table, id, collectorID, lastRunID, run.CollectorID, run.RunID)
+	}
+}
+
+func TestBulkUpsert(t *testing.T) {
+	t.Parallel()
+
+	db := openBenchDB(t)
+	cs := NewCollectorStore(db)
+	bs := NewBulkStore(db)
+	c := createCollector(t, cs)
+	run := RunRef{CollectorID: c.ID, RunID: must(cs.StartRun(t.Context(), c.ID, RunModeFull))(t).ID}
+	tag := uuid.NewString()
+
+	existing := createBulk(t, db, []BulkStreetInput{bulkStreet("Bestand "+tag, 1)})[0]
+
+	changed := bulkStreet("Bestand "+tag, 1, 2)
+	changed.Latitude = 51
+	changed.HouseNumbers[0].Postcode = "53229"
+	added := bulkStreet("Neu "+tag, 4)
+
+	results := must(bs.Upsert(t.Context(), run, []BulkStreetInput{changed, added}))(t)
+	t.Cleanup(func() { db.Delete(&Street{}, "id = ?", results[1].Street.ID) })
+
+	if results[0].Street.ID != existing.Street.ID || results[0].HouseNumbers[0].ID != existing.HouseNumbers[0].ID {
+		t.Fatalf("Upsert gave street %s house number %s, want the stored %s and %s",
+			results[0].Street.ID, results[0].HouseNumbers[0].ID, existing.Street.ID, existing.HouseNumbers[0].ID)
+	}
+
+	var stored HouseNumber
+	if err := db.Take(&stored, "id = ?", existing.HouseNumbers[0].ID).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if stored.Postcode != "53229" {
+		t.Fatalf("house number postcode = %q, want it updated to 53229", stored.Postcode)
+	}
+
+	for _, r := range results {
+		wantTagged(t, db, "streets", r.Street.ID, run)
+
+		for _, h := range r.HouseNumbers {
+			wantTagged(t, db, "house_numbers", h.ID, run)
+		}
+	}
+
+	// Sending the same batch again changes nothing but the counts.
+	again := must(bs.Upsert(t.Context(), run, []BulkStreetInput{changed, added}))(t)
+	if again[1].Street.ID != results[1].Street.ID || again[0].HouseNumbers[1].ID != results[0].HouseNumbers[1].ID {
+		t.Fatal("repeated Upsert did not match the rows of the first")
+	}
+
+	runs := must(cs.ListRuns(t.Context(), c.ID, 1))(t)
+	if runs[0].Streets != 4 || runs[0].HouseNumbers != 6 {
+		t.Fatalf("run counts streets %d, house numbers %d; want 4 and 6", runs[0].Streets, runs[0].HouseNumbers)
+	}
+
+	_, err := bs.Upsert(t.Context(), run, []BulkStreetInput{added, added})
+	wantErrorIs(t, "repeated street", err, ErrStreetRepeated)
+
+	_, err = bs.Upsert(t.Context(), RunRef{CollectorID: createCollector(t, cs).ID, RunID: run.RunID}, []BulkStreetInput{added})
+	wantErrorIs(t, "run of another collector", err, ErrRunNotFound)
+
+	must(cs.FinishRun(t.Context(), c.ID, run.RunID, RunStateSucceeded, ""))(t)
+
+	_, err = bs.Upsert(t.Context(), run, []BulkStreetInput{added})
+	wantErrorIs(t, "finished run", err, ErrRunNotRunning)
+}

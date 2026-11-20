@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // BulkHouseNumberInput is a house number to create under a BulkStreetInput.
@@ -208,4 +209,87 @@ func (bs *BulkStore) duplicateStreetError(ctx context.Context, streets []Street)
 
 	// The conflicting street was inserted concurrently and has since gone.
 	return ErrStreetAlreadyExists
+}
+
+// ErrStreetRepeated is returned when a batch names the same street twice.
+var ErrStreetRepeated = errors.New("the street appears more than once in the batch")
+
+// Upsert writes every street and its house numbers in a single transaction,
+// as part of the collector run named by ref. Streets match stored ones by
+// name, district, city and country, and house numbers by street, number and
+// addition; matches are updated and keep their IDs, the rest are inserted.
+// Every row written is tagged with ref. It returns ErrStreetRepeated if a
+// street appears twice in inputs, and the errors of recordRunWrite.
+func (bs *BulkStore) Upsert(ctx context.Context, ref RunRef, inputs []BulkStreetInput) ([]BulkResult, error) {
+	streets := make([]Street, len(inputs))
+	seen := make(map[streetKey]int, len(inputs))
+	total := 0
+
+	for i, input := range inputs {
+		key := streetKey{input.Name, input.District, input.City, input.Country}
+		if j, dup := seen[key]; dup {
+			return nil, fmt.Errorf("streets[%d]: %w (as streets[%d])", i, ErrStreetRepeated, j)
+		}
+
+		seen[key] = i
+		streets[i] = Street{City: input.City, District: input.District, Name: input.Name, Country: input.Country, Latitude: input.Latitude, Longitude: input.Longitude}
+		ref.tag(&streets[i].CollectorID, &streets[i].LastRunID)
+
+		total += len(input.HouseNumbers)
+	}
+
+	houseNumbers := make([]HouseNumber, 0, total)
+
+	err := bs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := recordRunWrite(tx, ref, len(streets), total, 0); err != nil {
+			return err
+		}
+
+		// DO UPDATE, unlike DO NOTHING, returns a row for every input, so
+		// RETURNING still fills in streets[i].ID in order.
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "name"}, {Name: "district"}, {Name: "city"}, {Name: "country"}},
+			DoUpdates: clause.AssignmentColumns([]string{"latitude", "longitude", "collector_id", "last_run_id"}),
+		}).CreateInBatches(&streets, insertBatchSize).Error
+		if err != nil {
+			return err
+		}
+
+		for i, input := range inputs {
+			for _, h := range input.HouseNumbers {
+				hn := HouseNumber{StreetID: streets[i].ID, Number: h.Number, NumberAddition: h.NumberAddition, Postcode: h.Postcode, Latitude: h.Latitude, Longitude: h.Longitude}
+				ref.tag(&hn.CollectorID, &hn.LastRunID)
+				houseNumbers = append(houseNumbers, hn)
+			}
+		}
+
+		if len(houseNumbers) == 0 {
+			return nil
+		}
+
+		err = tx.Clauses(clause.OnConflict{
+			// Matches houseNumbersKey, whose last column is an expression.
+			Columns:   []clause.Column{{Name: "street_id"}, {Name: "number"}, {Name: "(coalesce(number_addition, ''))", Raw: true}},
+			DoUpdates: clause.AssignmentColumns([]string{"number_addition", "postcode", "latitude", "longitude", "collector_id", "last_run_id"}),
+		}).CreateInBatches(&houseNumbers, insertBatchSize).Error
+		if err != nil {
+			return fmt.Errorf("houseNumbers: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]BulkResult, len(inputs))
+	offset := 0
+
+	for i, input := range inputs {
+		end := offset + len(input.HouseNumbers)
+		results[i] = BulkResult{Street: streets[i], HouseNumbers: houseNumbers[offset:end:end]}
+		offset = end
+	}
+
+	return results, nil
 }

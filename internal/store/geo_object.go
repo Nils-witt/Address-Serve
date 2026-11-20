@@ -253,19 +253,38 @@ func (st *GeoObjectStore) GetByExternalID(ctx context.Context, externalID string
 }
 
 // UpsertByExternalID creates the geo object with the given external ID, or
-// replaces it if it exists, keeping its ID. It reports whether the object was
-// created and returns the same reference errors as Create, and ErrNameTaken
-// if another geo object already has g's name in its group.
+// replaces it if it exists, keeping its ID. A non-nil run tags the object as
+// written in that collector run; otherwise its collector columns are kept.
+// It reports whether the object was created and returns the same reference
+// errors as Create, ErrNameTaken if another geo object already has g's name
+// in its group, and the errors of recordRunWrite.
 func (st *GeoObjectStore) UpsertByExternalID(
 	ctx context.Context,
 	externalID string,
 	g GeoObject,
+	run *RunRef,
 ) (GeoObject, bool, error) {
 	g.ExternalID = &externalID
+	g.CollectorID, g.LastRunID = nil, nil
+
+	// Outside a run the collector columns are kept as they are.
+	omitted := append([]string{"id"}, collectorColumns...)
+
+	if run != nil {
+		run.tag(&g.CollectorID, &g.LastRunID)
+
+		omitted = []string{"id"}
+	}
 
 	var created bool
 
 	err := st.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if run != nil {
+			if err := recordRunWrite(tx, *run, 0, 0, 1); err != nil {
+				return err
+			}
+		}
+
 		if err := checkHouseNumberOnStreet(tx, g); err != nil {
 			return err
 		}
@@ -283,7 +302,7 @@ func (st *GeoObjectStore) UpsertByExternalID(
 			err = tx.Create(&g).Error
 		case err == nil:
 			g.ID = existing.ID
-			err = tx.Model(&g).Select("*").Omit(append([]string{"id"}, collectorColumns...)...).Updates(&g).Error
+			err = tx.Model(&g).Select("*").Omit(omitted...).Updates(&g).Error
 		}
 
 		return geoObjectWriteError(err)

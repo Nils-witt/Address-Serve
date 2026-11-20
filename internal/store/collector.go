@@ -205,7 +205,56 @@ var (
 	// ErrRunNotRunning is returned when a run that has already finished is
 	// finished again or written to.
 	ErrRunNotRunning = errors.New("the run is not running")
+
+	// ErrRunNotFound is returned when a write names a run that its collector
+	// does not have.
+	ErrRunNotFound = errors.New("the collector has no such run")
 )
+
+// RunRef names the collector run a write is made in. Rows written under it
+// are tagged with the collector and the run.
+type RunRef struct {
+	CollectorID uuid.UUID
+	RunID       uuid.UUID
+}
+
+// tag sets the collector columns of a row to r.
+func (r RunRef) tag(collectorID, lastRunID **uuid.UUID) {
+	*collectorID = &r.CollectorID
+	*lastRunID = &r.RunID
+}
+
+// recordRunWrite adds the given row counts to the run named by ref, which
+// must be running. Writes made in one run are serialised by the row lock it
+// takes, and FinishRun waits for them, so its cleanup sees every row the run
+// wrote. It returns ErrRunNotFound or ErrRunNotRunning otherwise.
+func recordRunWrite(tx *gorm.DB, ref RunRef, streets, houseNumbers, geoObjects int) error {
+	res := tx.Model(&CollectorRun{}).
+		Where("id = ? AND collector_id = ? AND state = ?", ref.RunID, ref.CollectorID, RunStateRunning).
+		Updates(map[string]any{
+			"streets":       gorm.Expr("streets + ?", streets),
+			"house_numbers": gorm.Expr("house_numbers + ?", houseNumbers),
+			"geo_objects":   gorm.Expr("geo_objects + ?", geoObjects),
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+
+	if res.RowsAffected == 1 {
+		return nil
+	}
+
+	var n int64
+	if err := tx.Model(&CollectorRun{}).Where("id = ? AND collector_id = ?", ref.RunID, ref.CollectorID).Count(&n).Error; err != nil {
+		return err
+	}
+
+	if n == 0 {
+		return ErrRunNotFound
+	}
+
+	return ErrRunNotRunning
+}
 
 // CollectorStore reads and writes collectors and their runs.
 type CollectorStore struct {

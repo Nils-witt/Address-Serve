@@ -225,6 +225,12 @@ func handleUpsertGeoObjectByExternalID(geoObjects *store.GeoObjectStore) http.Ha
 			return
 		}
 
+		run, err := runRefFromRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
 		var g store.GeoObject
 		if err := json.NewDecoder(r.Body).Decode(&g); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -238,7 +244,11 @@ func handleUpsertGeoObjectByExternalID(geoObjects *store.GeoObjectStore) http.Ha
 			return
 		}
 
-		saved, created, err := geoObjects.UpsertByExternalID(r.Context(), externalID, g)
+		saved, created, err := geoObjects.UpsertByExternalID(r.Context(), externalID, g, run)
+		if writeRunWriteError(w, err) {
+			return
+		}
+
 		if err != nil {
 			writeGeoObjectWriteError(w, err)
 			return
