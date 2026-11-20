@@ -189,6 +189,61 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_CollectorToken(t *testing.T) {
+	t.Parallel()
+
+	collectorID, tokenID := uuid.New(), uuid.New()
+	tokens := fakeAPITokens{testAPIToken: {ID: tokenID, OwnerSub: testSubject, CollectorID: &collectorID}}
+
+	handler := authMiddleware(nil, tokens)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p, _ := principalFrom(r.Context()); p.CollectorID == nil || *p.CollectorID != collectorID {
+			t.Errorf("principal = %+v, want collector %s", p, collectorID)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tests := []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{http.MethodGet, "/api/collector", http.StatusOK},
+		{http.MethodPost, "/api/collector/runs", http.StatusOK},
+		{http.MethodPost, "/api/collector/runs/1/finish", http.StatusOK},
+		{http.MethodPost, "/api/bulk", http.StatusOK},
+		{http.MethodPut, "/api/geo-objects/by-external-id/x", http.StatusOK},
+		{http.MethodGet, "/api/streets", http.StatusOK},
+		{http.MethodGet, "/api/geo-objects/by-external-id/x", http.StatusOK},
+		{http.MethodPost, "/api/streets", http.StatusForbidden},
+		{http.MethodDelete, "/api/streets/1", http.StatusForbidden},
+		{http.MethodDelete, "/api/geo-objects/by-external-id/x", http.StatusForbidden},
+		{http.MethodPost, "/api/geo-objects/bulk-delete", http.StatusForbidden},
+		{http.MethodGet, "/api/tokens", http.StatusForbidden},
+		{http.MethodPost, "/api/tokens", http.StatusForbidden},
+		{http.MethodGet, "/api/collectors", http.StatusForbidden},
+		{http.MethodGet, "/api/collectors/1/runs", http.StatusForbidden},
+		{http.MethodPost, "/api/collector/../tokens", http.StatusForbidden},
+		{http.MethodGet, "/api/collector/../collectors", http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequestWithContext(t.Context(), tt.method, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer "+testAPIToken)
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tt.want, rec.Body)
+			}
+		})
+	}
+}
+
 func TestNewOIDCVerifierIssuerMismatch(t *testing.T) {
 	t.Parallel()
 

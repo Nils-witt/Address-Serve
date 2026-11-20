@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -31,6 +32,9 @@ type principal struct {
 	// APITokenID is set when the request carried an API token rather than an
 	// OIDC token.
 	APITokenID *uuid.UUID
+	// CollectorID is set when that API token is a collector's. Such a
+	// principal may only call the routes collectorMayCall allows.
+	CollectorID *uuid.UUID
 }
 
 // principalFrom returns the principal authMiddleware stored in ctx.
@@ -68,6 +72,11 @@ func authMiddleware(verifier *OIDCVerifier, tokens apiTokenAuthenticator) func(h
 				return
 			}
 
+			if p.CollectorID != nil && !collectorMayCall(r) {
+				writeError(w, http.StatusForbidden, "collector tokens can't call this route")
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), principalContextKey, p)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -101,7 +110,33 @@ func apiTokenPrincipal(ctx context.Context, tokens apiTokenAuthenticator, secret
 		return principal{}, err
 	}
 
-	return principal{Subject: t.OwnerSub, Name: t.OwnerName, APITokenID: &t.ID}, nil
+	return principal{Subject: t.OwnerSub, Name: t.OwnerName, APITokenID: &t.ID, CollectorID: t.CollectorID}, nil
+}
+
+// collectorMayCall reports whether a collector token may make request r: it
+// may use the collector routes, write through the two routes collectors feed
+// data with, and read everything but tokens and collectors. That way a leaked
+// collector token can't delete data or reach other credentials.
+func collectorMayCall(r *http.Request) bool {
+	p := path.Clean(r.URL.Path)
+
+	switch {
+	case underPath(p, "/api/collector"):
+		return true
+	case r.Method == http.MethodPost && p == "/api/bulk":
+		return true
+	case r.Method == http.MethodPut && strings.HasPrefix(p, "/api/geo-objects/by-external-id/"):
+		return true
+	case r.Method == http.MethodGet || r.Method == http.MethodHead:
+		return !underPath(p, "/api/tokens") && !underPath(p, "/api/collectors")
+	}
+
+	return false
+}
+
+// underPath reports whether p is root or lies below it.
+func underPath(p, root string) bool {
+	return p == root || strings.HasPrefix(p, root+"/")
 }
 
 // displayName picks the most readable name claim present, falling back to sub.
