@@ -21,6 +21,16 @@ tags:
   - name: geocoding
   - name: bulk
   - name: api-tokens
+  - name: collectors
+    description: Managing collectors, the systems that feed data in runs
+  - name: collector
+    description: >-
+      Routes for collectors themselves, called with a collector token. A run
+      starts with POST /api/collector/runs, writes data through POST /api/bulk
+      and PUT /api/geo-objects/by-external-id/{externalId} with the
+      X-Collector-Run header, and ends with
+      POST /api/collector/runs/{runId}/finish. A successful full run deletes
+      the collector's data it did not write in the run.
   - name: ui
   - name: docs
 
@@ -350,8 +360,16 @@ paths:
         request. The whole batch is applied atomically: if any street or house
         number fails to create (e.g. a duplicate street, or a validation error),
         nothing in the request is persisted.
+
+        With a collector token, the request must name its run in the
+        X-Collector-Run header and upserts instead: streets matching a stored
+        one by name, district, city and country, and house numbers matching
+        by street, number and addition, are updated and keep their IDs. The
+        response is then 200.
       operationId: bulkCreate
-      tags: [bulk]
+      tags: [bulk, collector]
+      parameters:
+        - $ref: "#/components/parameters/CollectorRun"
       requestBody:
         required: true
         content:
@@ -362,6 +380,14 @@ paths:
               items:
                 $ref: "#/components/schemas/BulkStreetInput"
       responses:
+        "200":
+          description: In a collector run, the written streets and house numbers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BulkResult"
         "201":
           description: The created streets and house numbers
           content:
@@ -371,7 +397,10 @@ paths:
                 items:
                   $ref: "#/components/schemas/BulkResult"
         "400":
-          description: Invalid request body
+          description: >-
+            Invalid request body (including a house number repeated within its
+            street, or, in a run, a street repeated within the batch), or a
+            missing, malformed or unknown X-Collector-Run
           content:
             application/json:
               schema:
@@ -382,8 +411,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
-          description: A street with this name, district, city and country already exists
+          description: >-
+            Outside a run, a street with this name, district, city and country
+            already exists; in a run, the run has finished
           content:
             application/json:
               schema:
@@ -493,6 +526,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: The street already has a house number with this number and addition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/house-numbers/{id}:
     parameters:
@@ -559,6 +598,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The street already has a house number with this number and addition
           content:
             application/json:
               schema:
@@ -863,8 +908,13 @@ paths:
         exists, keeping its ID. The path value overrides any externalId in the
         body. Meant for systems such as tileserve-go that keep their objects in
         sync.
+
+        With a collector token, the request must name its run in the
+        X-Collector-Run header, and the geo object is tagged as written in it.
       operationId: upsertGeoObjectByExternalId
-      tags: [geo-objects]
+      tags: [geo-objects, collector]
+      parameters:
+        - $ref: "#/components/parameters/CollectorRun"
       requestBody:
         required: true
         content:
@@ -885,13 +935,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/GeoObject"
         "409":
-          description: name is already used by another geo object in the same group
+          description: >-
+            name is already used by another geo object in the same group, or
+            the collector run has finished
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "400":
-          description: Invalid external ID or request body, or invalid street or house number reference
+          description: >-
+            Invalid external ID or request body, invalid street or house
+            number reference, or a missing, malformed or unknown
+            X-Collector-Run
           content:
             application/json:
               schema:
@@ -1151,7 +1206,387 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/collectors:
+    get:
+      summary: List collectors
+      description: Lists every collector with its status and last run, ordered by name.
+      operationId: listCollectors
+      tags: [collectors]
+      responses:
+        "200":
+          description: The collectors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      summary: Register a collector
+      description: >-
+        Creates a collector and the API token it authenticates with. The
+        response is the only time the secret is shown. Requires an OIDC
+        token; API tokens can't manage collectors.
+      operationId: createCollector
+      tags: [collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectorInput"
+      responses:
+        "201":
+          description: The created collector, including its token secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedCollector"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Another collector already has this name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/collectors/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CollectorId"
+    get:
+      summary: Get a collector
+      operationId: getCollector
+      tags: [collectors]
+      responses:
+        "200":
+          description: The collector
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collector"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+
+    put:
+      summary: Update a collector
+      description: Replaces the collector's name, description and expected interval. Requires an OIDC token.
+      operationId: updateCollector
+      tags: [collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectorInput"
+      responses:
+        "200":
+          description: The updated collector
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collector"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+        "409":
+          description: Another collector already has this name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      summary: Delete a collector
+      description: >-
+        Deletes the collector, its runs and its token, which stops working
+        immediately. The data it wrote stays and no longer belongs to any
+        collector. Requires an OIDC token.
+      operationId: deleteCollector
+      tags: [collectors]
+      responses:
+        "204":
+          description: Collector deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+
+  /api/collectors/{id}/token:
+    parameters:
+      - $ref: "#/components/parameters/CollectorId"
+    post:
+      summary: Rotate a collector's token
+      description: >-
+        Replaces the collector's token with a new one; the old one stops
+        working immediately. The response is the only time the new secret is
+        shown. Requires an OIDC token.
+      operationId: rotateCollectorToken
+      tags: [collectors]
+      responses:
+        "200":
+          description: The new token secret
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token]
+                properties:
+                  token:
+                    type: string
+                    example: asv_Xk3v9QaZ7m2b0VqYw1sN4eLr8tHcJpGdUfKiAoBxE5y
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+
+  /api/collectors/{id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/CollectorId"
+    get:
+      summary: List a collector's runs
+      description: Lists the collector's most recent runs, newest first. The last 50 are kept.
+      operationId: listCollectorRuns
+      tags: [collectors]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: The runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CollectorRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/CollectorNotFound"
+
+  /api/collector:
+    get:
+      summary: Get the calling collector
+      description: Returns the collector whose token made the request, for checking a token.
+      operationId: getOwnCollector
+      tags: [collector]
+      responses:
+        "200":
+          description: The collector
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/NotACollector"
+
+  /api/collector/heartbeat:
+    post:
+      summary: Send a heartbeat
+      description: >-
+        Records contact from the collector. Any request with a collector
+        token counts as contact too (recorded at most once a minute). An open
+        run with no contact for 30 minutes counts as failed.
+      operationId: collectorHeartbeat
+      tags: [collector]
+      responses:
+        "204":
+          description: Contact recorded
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/NotACollector"
+
+  /api/collector/runs:
+    post:
+      summary: Start a run
+      description: >-
+        Opens a run for the calling collector. A collector has at most one
+        open run; one with no contact for 30 minutes is closed as failed
+        when the next run starts.
+      operationId: startCollectorRun
+      tags: [collector]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  $ref: "#/components/schemas/RunMode"
+      responses:
+        "201":
+          description: The started run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/NotACollector"
+        "409":
+          description: The collector already has an open run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/collector/runs/{runId}/finish:
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Finish a run
+      description: >-
+        Closes the run. When a full run succeeds, the collector's streets,
+        house numbers and geo objects that were not written in it are
+        deleted first; a street is only deleted once nothing else is left
+        on it. A failed or incremental run deletes nothing.
+      operationId: finishCollectorRun
+      tags: [collector]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state:
+                  type: string
+                  enum: [succeeded, failed]
+                error:
+                  type: string
+                  description: What went wrong, for a failed run. Cut to 2000 characters.
+      responses:
+        "200":
+          description: The finished run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/NotACollector"
+        "404":
+          description: The collector has no run with this ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The run has already finished
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
+  parameters:
+    CollectorId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CollectorRun:
+      name: X-Collector-Run
+      in: header
+      required: false
+      description: >-
+        The ID of the collector run the write is made in. Required with a
+        collector token, not allowed with any other token.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid ID, query parameter or request body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: >-
+        A collector token may not call this route; or, for routes that
+        change collectors, the request was not made with an OIDC token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotACollector:
+      description: The request was not made with a collector token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    CollectorNotFound:
+      description: No collector has this ID
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -1160,7 +1595,10 @@ components:
         Send as `Authorization: Bearer <token>`. The token is either a JWT
         issued by the configured OpenID Connect provider, checked against the
         provider's JWKS, issuer and audience, or an API token (starting with
-        `asv_`) created at /api/tokens.
+        `asv_`) created at /api/tokens or with a collector at
+        /api/collectors. A collector token may only call the collector
+        routes, the two write routes collectors feed data with, and read-only
+        routes other than tokens and collectors.
 
   schemas:
     District:
@@ -1554,6 +1992,130 @@ components:
               type: string
               description: The secret. Shown only in this response.
               example: asv_Xk3v9QaZ7m2b0VqYw1sN4eLr8tHcJpGdUfKiAoBxE5y
+
+    CollectorInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: Unique name of the collector
+          example: Bonn Stadtplan
+        description:
+          type: string
+          maxLength: 500
+          example: Imports the city of Bonn's address points nightly
+        expectedIntervalMinutes:
+          type: integer
+          minimum: 1
+          maximum: 527040
+          nullable: true
+          description: >-
+            How often the collector should complete a run. Once its last
+            success is twice as old, its status is stale. Omit or null to
+            never mark it stale.
+          example: 1440
+
+    CollectorStatus:
+      type: string
+      enum: [never, running, ok, failed, stale]
+      description: >-
+        never: no run yet. running: a run is open and the collector was in
+        contact within 30 minutes. failed: the last run failed, or an open run
+        had no contact for 30 minutes. stale: the last run succeeded, but the
+        last success is older than twice the expected interval. ok: otherwise.
+
+    Collector:
+      type: object
+      required: [id, name, description, expectedIntervalMinutes, createdAt, lastSeenAt, lastSuccessAt, status, lastRun]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Bonn Stadtplan
+        description:
+          type: string
+        expectedIntervalMinutes:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last contact from the collector
+        lastSuccessAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a run of the collector last succeeded
+        status:
+          $ref: "#/components/schemas/CollectorStatus"
+        lastRun:
+          allOf:
+            - $ref: "#/components/schemas/CollectorRun"
+          nullable: true
+
+    CreatedCollector:
+      allOf:
+        - $ref: "#/components/schemas/Collector"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: The collector's API token secret. Shown only in this response.
+              example: asv_Xk3v9QaZ7m2b0VqYw1sN4eLr8tHcJpGdUfKiAoBxE5y
+
+    RunMode:
+      type: string
+      enum: [incremental, full]
+      description: >-
+        incremental: only adds and updates data. full: once the run
+        succeeds, also deletes the collector's data not written in it.
+
+    CollectorRun:
+      type: object
+      required: [id, collectorId, mode, state, startedAt, finishedAt, streets, houseNumbers, geoObjects, deleted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        collectorId:
+          type: string
+          format: uuid
+        mode:
+          $ref: "#/components/schemas/RunMode"
+        state:
+          type: string
+          enum: [running, succeeded, failed]
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        streets:
+          type: integer
+          description: Streets written in the run
+        houseNumbers:
+          type: integer
+          description: House numbers written in the run
+        geoObjects:
+          type: integer
+          description: Geo objects written in the run
+        deleted:
+          type: integer
+          description: Rows the full-sync cleanup deleted when the run succeeded
+        error:
+          type: string
+          description: What went wrong, for a failed run
 
     UIConfig:
       type: object

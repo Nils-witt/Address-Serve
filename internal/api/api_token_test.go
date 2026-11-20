@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,21 +22,7 @@ import (
 func TestAPITokenFlow(t *testing.T) {
 	t.Parallel()
 
-	dsn := os.Getenv("ADDRESS_SERV_TEST_DSN")
-	if dsn == "" {
-		t.Skip("ADDRESS_SERV_TEST_DSN not set")
-	}
-
-	db, err := store.Open(t.Context(), dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close(db) })
-
-	if err := store.Migrate(t.Context(), db); err != nil {
-		t.Fatal(err)
-	}
+	db := openTestDB(t)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -51,7 +36,7 @@ func TestAPITokenFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewHandler(Config{OIDC: oidc}, store.NewStreetStore(db), nil, nil, nil, store.NewAPITokenStore(db))
+	handler := NewHandler(Config{OIDC: oidc}, store.NewStreetStore(db), nil, nil, nil, store.NewAPITokenStore(db), nil)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"iss":    provider.URL,

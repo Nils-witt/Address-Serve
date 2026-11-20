@@ -72,6 +72,7 @@ func run() error {
 		store.NewGeoObjectStore(db),
 		store.NewBulkStore(db),
 		store.NewAPITokenStore(db),
+		store.NewCollectorStore(db),
 	)
 
 	addr := getenvDefault("LISTEN_ADDR", ":8080")

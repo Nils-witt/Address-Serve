@@ -33,6 +33,7 @@ func NewHandler(
 	geoObjects *store.GeoObjectStore,
 	bulk *store.BulkStore,
 	tokens *store.APITokenStore,
+	collectors *store.CollectorStore,
 ) http.Handler {
 	mux := http.NewServeMux()
 	registerStreetRoutes(mux, streets)
@@ -42,6 +43,7 @@ func NewHandler(
 	registerAddressSearchRoutes(mux, houseNumbers)
 	registerBulkRoutes(mux, bulk)
 	registerAPITokenRoutes(mux, tokens)
+	registerCollectorRoutes(mux, collectors)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

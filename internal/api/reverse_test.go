@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/nils-witt/address-serve/internal/store"
@@ -54,21 +53,7 @@ func TestHandleReverseGeocodeValidation(t *testing.T) {
 func TestHandleReverseGeocodeResponse(t *testing.T) {
 	t.Parallel()
 
-	dsn := os.Getenv("ADDRESS_SERV_TEST_DSN")
-	if dsn == "" {
-		t.Skip("ADDRESS_SERV_TEST_DSN not set")
-	}
-
-	db, err := store.Open(t.Context(), dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close(db) })
-
-	if err := store.Migrate(t.Context(), db); err != nil {
-		t.Fatal(err)
-	}
+	db := openTestDB(t)
 
 	handler := handleReverseGeocode(store.NewHouseNumberStore(db), store.NewGeoObjectStore(db))
 
