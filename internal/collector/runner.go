@@ -53,6 +53,9 @@ type Config struct {
 	GeoMaxDistanceMeters float64
 	// RunHistory is how many runs to keep per collector.
 	RunHistory int
+	// LogFlushInterval is how often a running run's log is saved. Zero
+	// means logFlushInterval.
+	LogFlushInterval time.Duration
 }
 
 // Runner discovers collectors and runs them in the background, one run per
@@ -187,8 +190,13 @@ func (r *Runner) collectAndSync(ctx context.Context, run store.CollectorRun, c s
 
 	timeout := fmt.Errorf("timed out after %s", r.cfg.Timeout)
 	collectCtx, cancel := context.WithTimeoutCause(ctx, r.cfg.Timeout, timeout)
-	result, err := runCommand(collectCtx, c.Path, []string{"collect"}, env)
+	logBuf := &tailBuffer{max: maxLogBytes}
+	stopLog := r.streamLog(ctx, run.ID, logBuf)
+	result, err := runCommand(collectCtx, c.Path, []string{"collect"}, env, logBuf)
 
+	// The log is final once the process is gone; FinishRun saves it. Waiting
+	// for the last save keeps it from racing the phase change and FinishRun.
+	stopLog()
 	cancel()
 
 	outcome := store.RunOutcome{Log: result.log}
@@ -224,4 +232,52 @@ func (r *Runner) collectAndSync(ctx context.Context, run store.CollectorRun, c s
 	outcome.Status, outcome.Stats, outcome.Issues = store.RunSucceeded, &stats, issues
 
 	return outcome
+}
+
+// streamLog saves buf as the log of the running run every flush interval
+// while it changes, so the log can be read before the run ends. The returned
+// func stops it and waits until it has stopped.
+func (r *Runner) streamLog(ctx context.Context, runID uuid.UUID, buf *tailBuffer) (stop func()) {
+	interval := r.cfg.LogFlushInterval
+	if interval <= 0 {
+		interval = logFlushInterval
+	}
+
+	done := make(chan struct{})
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		var saved uint64
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+
+			s, writes := buf.Snapshot()
+			if writes == saved {
+				continue
+			}
+
+			if err := r.store.SetRunLog(ctx, runID, s); err != nil {
+				log.Printf("run %s: save the log: %v", runID, err)
+				continue
+			}
+
+			saved = writes
+		}
+	})
+
+	return func() {
+		close(done)
+		wg.Wait()
+	}
 }

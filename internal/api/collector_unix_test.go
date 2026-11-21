@@ -35,7 +35,7 @@ esac
 const slowCollector = `#!/bin/sh
 case "$1" in
 describe) echo '{"contractVersion":1,"name":"Slow","version":"1"}';;
-collect) sleep 30;;
+collect) echo "starting" >&2; sleep 30;;
 esac
 `
 
@@ -73,7 +73,9 @@ func newCollectorAPIFixture(t *testing.T) collectorAPIFixture {
 	}
 
 	cs := store.NewCollectorStore(db)
-	runner := collector.NewRunner(cs, collector.Config{Dir: dir, Timeout: time.Minute, RunHistory: 10})
+	runner := collector.NewRunner(cs, collector.Config{
+		Dir: dir, Timeout: time.Minute, RunHistory: 10, LogFlushInterval: 50 * time.Millisecond,
+	})
 	t.Cleanup(runner.Wait)
 
 	handler := NewHandler(Config{
@@ -201,13 +203,28 @@ func TestCollectorAPI_Cancel(t *testing.T) {
 	var run store.CollectorRun
 	f.expect(http.MethodPost, "/api/collectors/slow/runs", admin, "", http.StatusAccepted, &run)
 	f.expect(http.MethodPost, "/api/collectors/slow/runs", admin, "", http.StatusConflict, nil)
+
+	// The log so far shows while the run runs.
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		var live store.CollectorRun
+		f.expect(http.MethodGet, "/api/collector-runs/"+run.ID.String(), admin, "", http.StatusOK, &live)
+
+		if live.Status == store.RunRunning && live.Log == "starting\n" {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("running run = %+v, want status running and log %q", live, "starting\n")
+		}
+	}
+
 	f.expect(http.MethodPost, "/api/collector-runs/"+run.ID.String()+"/cancel", admin, "", http.StatusAccepted, nil)
 	f.runner.Wait()
 
 	f.expect(http.MethodGet, "/api/collector-runs/"+run.ID.String(), admin, "", http.StatusOK, &run)
 
-	if run.Status != store.RunCancelled {
-		t.Errorf("run = %+v, want cancelled", run)
+	if run.Status != store.RunCancelled || run.Log != "starting\n" {
+		t.Errorf("run = %+v, want cancelled with its log", run)
 	}
 
 	f.expect(http.MethodPost, "/api/collector-runs/"+run.ID.String()+"/cancel", admin, "", http.StatusConflict, nil)

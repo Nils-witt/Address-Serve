@@ -244,6 +244,44 @@ func TestCollectorStore_Runs(t *testing.T) {
 	}
 }
 
+func TestCollectorStore_SetRunLog(t *testing.T) {
+	t.Parallel()
+
+	f := newSyncFixture(t)
+	ctx := t.Context()
+
+	run, err := f.cs.CreateRun(ctx, f.id, "tester")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, log := range []string{"one\n", "one\ntwo\n"} {
+		if err := f.cs.SetRunLog(ctx, run.ID, log); err != nil {
+			t.Fatal(err)
+		}
+
+		if got, err := f.cs.GetRun(ctx, run.ID); err != nil || got.Log != log {
+			t.Errorf("GetRun = %+v, %v, want log %q", got, err, log)
+		}
+	}
+
+	if _, err := f.cs.FinishRun(ctx, run.ID, RunOutcome{Status: RunSucceeded, Log: "final"}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.cs.SetRunLog(ctx, run.ID, "late"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetRunLog of a finished run: err = %v, want ErrNotFound", err)
+	}
+
+	if got, err := f.cs.GetRun(ctx, run.ID); err != nil || got.Log != "final" {
+		t.Errorf("GetRun = %+v, %v, want the final log kept", got, err)
+	}
+
+	if err := f.cs.SetRunLog(ctx, uuid.New(), "x"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetRunLog of an unknown run: err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestCollectorStore_LastRuns(t *testing.T) {
 	t.Parallel()
 

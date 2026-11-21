@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -89,5 +90,39 @@ func TestTailBuffer(t *testing.T) {
 				t.Errorf("String = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTailBuffer_Snapshot(t *testing.T) {
+	t.Parallel()
+
+	b := &tailBuffer{max: 1 << 10}
+
+	if s, n := b.Snapshot(); s != "" || n != 0 {
+		t.Fatalf("empty Snapshot = %q, %d", s, n)
+	}
+
+	var wg sync.WaitGroup
+
+	// Writes race reads, as stderr does with saving the log; -race checks
+	// the locking.
+	for range 4 {
+		wg.Go(func() {
+			for range 50 {
+				_, _ = b.Write([]byte("x"))
+				_, _ = b.Snapshot()
+			}
+		})
+	}
+
+	wg.Wait()
+
+	s, n := b.Snapshot()
+	if len(s) != 200 || n != 200 {
+		t.Errorf("Snapshot = %d bytes, %d writes, want 200 and 200", len(s), n)
+	}
+
+	if _, again := b.Snapshot(); again != n {
+		t.Errorf("Snapshot without writes = %d writes, want %d", again, n)
 	}
 }

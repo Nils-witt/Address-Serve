@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -70,16 +72,31 @@ func collectEnv(
 // maxLogBytes caps the stderr kept from a collector run.
 const maxLogBytes = 1 << 20
 
-// tailBuffer keeps the last max bytes written to it.
+// logFlushInterval is how often a running run's log is saved, so the UI can
+// show it while the run goes on. It keeps pace with the UI's polling without
+// rewriting a log of up to maxLogBytes much more often than anyone reads it.
+const logFlushInterval = 2 * time.Second
+
+// tailBuffer keeps the last max bytes written to it. It is safe for
+// concurrent use: the command writes stderr while the run's log is saved.
 type tailBuffer struct {
-	max       int
+	max int
+
+	mu        sync.Mutex
 	buf       []byte
 	truncated bool
+	// writes counts the writes, so a reader can tell whether anything
+	// changed since it last looked.
+	writes uint64
 }
 
 // Write implements io.Writer. It never fails.
 func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.buf = append(t.buf, p...)
+	t.writes++
 
 	if over := len(t.buf) - t.max; over > 0 {
 		// Copying keeps the buffer from growing without bound.
@@ -93,10 +110,22 @@ func (t *tailBuffer) Write(p []byte) (int, error) {
 // String returns the kept bytes as text PostgreSQL can store: valid UTF-8
 // without NUL bytes.
 func (t *tailBuffer) String() string {
-	s := strings.ReplaceAll(strings.ToValidUTF8(string(t.buf), string(utf8.RuneError)), "\x00", "")
-	if t.truncated {
-		return "[earlier output truncated]\n" + s
-	}
+	s, _ := t.Snapshot()
 
 	return s
+}
+
+// Snapshot returns what String returns along with the number of writes so
+// far.
+func (t *tailBuffer) Snapshot() (string, uint64) {
+	t.mu.Lock()
+	raw, truncated, writes := string(t.buf), t.truncated, t.writes
+	t.mu.Unlock()
+
+	s := strings.ReplaceAll(strings.ToValidUTF8(raw, string(utf8.RuneError)), "\x00", "")
+	if truncated {
+		return "[earlier output truncated]\n" + s, writes
+	}
+
+	return s, writes
 }

@@ -88,7 +88,7 @@ func describe(ctx context.Context, id, path string, timeout time.Duration) (*con
 	ctx, cancel := context.WithTimeoutCause(ctx, timeout, fmt.Errorf("describe timed out after %s", timeout))
 	defer cancel()
 
-	result, err := runCommand(ctx, path, []string{"describe"}, baseEnv(os.LookupEnv, id))
+	result, err := runCommand(ctx, path, []string{"describe"}, baseEnv(os.LookupEnv, id), nil)
 	if err != nil {
 		return nil, err.Error()
 	}

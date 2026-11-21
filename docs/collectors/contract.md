@@ -99,7 +99,10 @@ any other.
 
 This fetches the data and prints **one** JSON document to stdout. Exit code 0
 means success. With any other exit code the run fails and **nothing** is
-applied. stderr is the run's log, and the last 1 MiB of it is kept.
+applied. stderr is the run's log, and the last 1 MiB of it is kept. The log
+shows while the run is running, saved every few seconds, so write progress
+lines as you go and don't buffer stderr (in Python, `print(..., file=sys.stderr,
+flush=True)`; Go's `os.Stderr` and `log` are unbuffered).
 
 ```json
 {

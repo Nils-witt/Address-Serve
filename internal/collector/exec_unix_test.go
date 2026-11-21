@@ -51,7 +51,7 @@ func TestRunCommand(t *testing.T) {
 
 			path := writeScript(t, t.TempDir(), "c", tt.body)
 
-			result, err := runCommand(t.Context(), path, []string{"collect"}, []string{"PATH=/bin:/usr/bin", "ONLY=given"})
+			result, err := runCommand(t.Context(), path, []string{"collect"}, []string{"PATH=/bin:/usr/bin", "ONLY=given"}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -67,7 +67,7 @@ func TestRunCommand(t *testing.T) {
 func TestRunCommand_StartFailure(t *testing.T) {
 	t.Parallel()
 
-	if _, err := runCommand(t.Context(), filepath.Join(t.TempDir(), "missing"), nil, nil); err == nil {
+	if _, err := runCommand(t.Context(), filepath.Join(t.TempDir(), "missing"), nil, nil, nil); err == nil {
 		t.Error("runCommand of a missing file succeeded")
 	}
 }
@@ -100,7 +100,7 @@ func TestRunCommand_KillsProcessGroup(t *testing.T) {
 			defer cancel()
 
 			start := time.Now()
-			_, err := runCommand(ctx, path, nil, []string{"PATH=/bin:/usr/bin", "PIDFILE=" + pidFile})
+			_, err := runCommand(ctx, path, nil, []string{"PATH=/bin:/usr/bin", "PIDFILE=" + pidFile}, nil)
 
 			if tt.wantErr != errors.Is(err, cause) {
 				t.Fatalf("err = %v, want cause %v: %t", err, cause, tt.wantErr)

@@ -50,6 +50,14 @@ func (cs *CollectorStore) SetRunPhase(ctx context.Context, id uuid.UUID, phase R
 		Where("id = ? AND status = ?", id, RunRunning).Update("phase", phase))
 }
 
+// SetRunLog replaces the log of the running run with the given ID with the
+// output so far. It returns ErrNotFound once the run has finished, whose log
+// FinishRun has the last word on.
+func (cs *CollectorStore) SetRunLog(ctx context.Context, id uuid.UUID, log string) error {
+	return requireOneRow(cs.db.WithContext(ctx).Model(&CollectorRun{}).
+		Where("id = ? AND status = ?", id, RunRunning).Update("log", log))
+}
+
 // RunOutcome is how a run ended.
 type RunOutcome struct {
 	Status   RunStatus

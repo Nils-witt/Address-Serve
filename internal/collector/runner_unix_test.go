@@ -42,7 +42,9 @@ func newRunnerFixture(t *testing.T, collectBody string, timeout time.Duration) r
 	writeScript(t, dir, "test.sh", collectorScript(collectBody))
 	writeScript(t, dir, "broken", "exit 1")
 
-	f := runnerFixture{runner: NewRunner(cs, Config{Dir: dir, Timeout: timeout, RunHistory: 10}), cs: cs}
+	f := runnerFixture{runner: NewRunner(cs, Config{
+		Dir: dir, Timeout: timeout, RunHistory: 10, LogFlushInterval: 50 * time.Millisecond,
+	}), cs: cs}
 
 	collectors, err := f.runner.Reload(t.Context())
 	if err != nil {
@@ -95,6 +97,53 @@ func TestRunner_Succeeds(t *testing.T) {
 
 	if run.Log != "collecting Main\n" || run.TriggeredBy != "tester" || run.FinishedAt == nil {
 		t.Errorf("run = %+v, want the log, trigger and finish time", run)
+	}
+}
+
+func TestRunner_LogWhileRunning(t *testing.T) {
+	t.Parallel()
+
+	f := newRunnerFixture(t, `echo "step 1" >&2; sleep 30`, time.Minute)
+	ctx := t.Context()
+
+	run, err := f.runner.Start(ctx, "test", "tester")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The flusher saves the log every 50ms; give it ample time on a slow
+	// machine.
+	deadline := time.Now().Add(10 * time.Second)
+
+	for {
+		got, err := f.cs.GetRun(ctx, run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got.Status != store.RunRunning {
+			t.Fatalf("run = %+v, want it still running", got)
+		}
+
+		if got.Log == "step 1\n" {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("log of the running run = %q, want %q", got.Log, "step 1\n")
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err := f.runner.Cancel(run.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	f.runner.Wait()
+
+	if run, _ = f.cs.GetRun(ctx, run.ID); run.Status != store.RunCancelled || run.Log != "step 1\n" {
+		t.Errorf("cancelled run = %+v, want its log kept", run)
 	}
 }
 

@@ -18,7 +18,7 @@ type commandResult struct {
 	exitCode int
 }
 
-func runCommand(context.Context, string, []string, []string) (commandResult, error) {
+func runCommand(context.Context, string, []string, []string, *tailBuffer) (commandResult, error) {
 	return commandResult{}, errUnsupported
 }
 

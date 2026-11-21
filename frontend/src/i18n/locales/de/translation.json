@@ -225,6 +225,7 @@
     },
     "log": "Log",
     "logEmpty": "Der Collector hat nichts in sein Log geschrieben.",
+    "logWaiting": "Warte auf die Ausgabe des Collectors…",
     "empty": "Keine Collectors gefunden. Lege ausführbare Dateien in den Collector-Ordner und lies ihn neu ein.",
     "deleteTitle": "{{name}} löschen?",
     "deleteMessage": "Seine Einstellungen und Läufe werden gelöscht. Seine Straßen, Hausnummern und Geo-Objekte werden zu manuellen Einträgen, die hier bearbeitet werden können, außer du löschst sie mit.",

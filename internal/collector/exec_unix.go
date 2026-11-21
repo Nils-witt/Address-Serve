@@ -28,11 +28,12 @@ type commandResult struct {
 }
 
 // runCommand runs path with args in a fresh temporary directory, with env as
-// its whole environment and no stdin. It runs in its own process group,
+// its whole environment and no stdin. Its stderr goes to stderr, or to a
+// fresh buffer if that is nil, and ends up in the result's log. It runs in its own process group,
 // which is killed when ctx ends and once the command exits, so children it
 // started don't outlive it. A non-zero exit is not an error; failing to
 // start and ctx ending are.
-func runCommand(ctx context.Context, path string, args, env []string) (commandResult, error) {
+func runCommand(ctx context.Context, path string, args, env []string, stderr *tailBuffer) (commandResult, error) {
 	dir, err := os.MkdirTemp("", "address-serv-collector-*")
 	if err != nil {
 		return commandResult{}, fmt.Errorf("create working directory: %w", err)
@@ -42,7 +43,10 @@ func runCommand(ctx context.Context, path string, args, env []string) (commandRe
 
 	var stdout bytes.Buffer
 
-	stderr := &tailBuffer{max: maxLogBytes}
+	if stderr == nil {
+		stderr = &tailBuffer{max: maxLogBytes}
+	}
+
 	// The path comes from the collectors folder, which only the operator
 	// controls; running what's there is the point.
 	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // see above

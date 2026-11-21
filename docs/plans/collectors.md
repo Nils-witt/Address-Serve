@@ -517,6 +517,10 @@ Where the implementation departs from, or adds to, the plan above:
 - **UI access.** The Collectors tab is hidden when `GET /api/collectors`
   answers 403 (not in the admin group) or 404 (collectors are unsupported on the
   server's OS).
+- **Live log.** While a run is collecting, the runner saves the stderr tail to
+  the run every 2 s (`SetRunLog`, only while the run is `running`), so
+  `GET /api/collector-runs/{runId}` and the UI, which polls running runs, show
+  the log before the run ends. `FinishRun` still writes the final log.
 - **Test helper.** `internal/store/storetest.OpenIsolated` gives tests a
   migrated database in a schema of their own. Tests that reload collectors
   need it, because a reload marks every collector it doesn't find as missing.

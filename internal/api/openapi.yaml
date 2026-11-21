@@ -1420,7 +1420,9 @@ paths:
       - $ref: "#/components/parameters/RunID"
     get:
       summary: Get a run
-      description: Returns the run with its issues and log.
+      description: >-
+        Returns the run with its issues and log. The log of a running run is
+        the output so far; poll to follow it.
       operationId: getCollectorRun
       tags: [collectors]
       responses:
@@ -2142,7 +2144,10 @@ components:
             $ref: "#/components/schemas/SyncIssue"
         log:
           type: string
-          description: The tail of the collector's stderr; only returned for a single run
+          description: >-
+            The tail (last 1 MiB) of the collector's stderr. While the run is
+            running, it holds the output so far, saved every few seconds. Only
+            returned for a single run.
 
     Error:
       type: object

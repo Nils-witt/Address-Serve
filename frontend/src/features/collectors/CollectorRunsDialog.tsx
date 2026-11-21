@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
   Button,
   Chip,
@@ -74,6 +74,37 @@ function StatsTable({ stats }: { stats: SyncStats }) {
   );
 }
 
+/** The run's log. While new output arrives, it stays scrolled to the end,
+ * unless the user scrolled up to read. */
+function RunLog({ run }: { run: CollectorRun }) {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLPreElement>(null);
+  const atEnd = useRef(true);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && atEnd.current) el.scrollTop = el.scrollHeight;
+  }, [run.log]);
+
+  const running = run.status === 'running';
+  return (
+    <div>
+      <Typography variant="subtitle2">{t('collectors.log')}</Typography>
+      <pre
+        ref={ref}
+        className="collector-runs-dialog__log"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          // A few pixels of slack, since scroll positions can be fractional.
+          atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+        }}
+      >
+        {run.log || t(running ? 'collectors.logWaiting' : 'collectors.logEmpty')}
+      </pre>
+    </div>
+  );
+}
+
 function RunDetail({ runId, onCancel }: { runId: string; onCancel: (run: CollectorRun) => void }) {
   const { t, i18n } = useTranslation();
   const { data: run, error } = useCollectorRun(runId);
@@ -136,10 +167,7 @@ function RunDetail({ runId, onCancel }: { runId: string; onCancel: (run: Collect
           </Table>
         </div>
       )}
-      <div>
-        <Typography variant="subtitle2">{t('collectors.log')}</Typography>
-        <pre className="collector-runs-dialog__log">{run.log || t('collectors.logEmpty')}</pre>
-      </div>
+      <RunLog run={run} />
     </Stack>
   );
 }

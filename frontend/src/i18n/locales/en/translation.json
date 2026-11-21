@@ -225,6 +225,7 @@
     },
     "log": "Log",
     "logEmpty": "The collector wrote nothing to its log.",
+    "logWaiting": "Waiting for the collector's output…",
     "empty": "No collectors found. Put executables into the collectors folder and rescan it.",
     "deleteTitle": "Delete {{name}}?",
     "deleteMessage": "Its settings and runs are deleted. The streets, house numbers and geo objects it owns become manual ones that can be edited here, unless you delete them too.",
