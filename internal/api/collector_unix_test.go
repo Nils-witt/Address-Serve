@@ -78,13 +78,13 @@ func newCollectorAPIFixture(t *testing.T) collectorAPIFixture {
 
 	handler := NewHandler(Config{
 		OIDC:       oidc,
-		Collectors: CollectorConfig{Runner: runner, Store: cs, Admin: AdminClaim{Claim: "realm_access.roles", Value: adminRole}},
+		Collectors: CollectorConfig{Runner: runner, Store: cs, AdminGroup: adminGroup},
 	}, store.NewStreetStore(db), nil, nil, nil, store.NewAPITokenStore(db))
 
-	sign := func(roles ...any) string {
+	sign := func(groups ...any) string {
 		token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 			"iss": provider.URL, "aud": testAudience, subClaim: testSubject, "name": "Ada",
-			"exp": time.Now().Add(time.Hour).Unix(), "realm_access": map[string]any{"roles": roles},
+			"exp": time.Now().Add(time.Hour).Unix(), groupsClaim: groups,
 		})
 		token.Header["kid"] = testKID
 
@@ -98,7 +98,7 @@ func newCollectorAPIFixture(t *testing.T) collectorAPIFixture {
 
 	return collectorAPIFixture{
 		t: t, handler: handler,
-		runner: runner, adminJWT: sign(adminRole), userJWT: sign("user"),
+		runner: runner, adminJWT: sign("users", adminGroup), userJWT: sign("users"),
 	}
 }
 

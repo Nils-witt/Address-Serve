@@ -128,12 +128,12 @@ func setUpCollectors(ctx context.Context, cs *store.CollectorStore) (api.Collect
 		log.Printf("collectors: %d known, folder %s", len(found), cfg.Dir)
 	}
 
-	admin := api.AdminClaim{Claim: os.Getenv("COLLECTOR_ADMIN_CLAIM"), Value: os.Getenv("COLLECTOR_ADMIN_VALUE")}
-	if admin.Claim == "" || admin.Value == "" {
-		log.Print("COLLECTOR_ADMIN_CLAIM or COLLECTOR_ADMIN_VALUE is unset; nobody can manage collectors")
+	adminGroup := os.Getenv("COLLECTOR_ADMIN_GROUP")
+	if adminGroup == "" {
+		log.Print("COLLECTOR_ADMIN_GROUP is unset; nobody can manage collectors")
 	}
 
-	return api.CollectorConfig{Runner: runner, Store: cs, Admin: admin}, nil
+	return api.CollectorConfig{Runner: runner, Store: cs, AdminGroup: adminGroup}, nil
 }
 
 // collectorConfig reads the runner's settings from the environment.

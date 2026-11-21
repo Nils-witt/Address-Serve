@@ -16,8 +16,8 @@ COLLECTORS_DIR=./collectors go run ./cmd/address-serv
 ```
 
 Then open *Collectors* in the web UI, configure the settings, and run it.
-Opening the page requires the claim configured in `COLLECTOR_ADMIN_CLAIM`
-and `COLLECTOR_ADMIN_VALUE`.
+Opening the page requires membership in the group configured in
+`COLLECTOR_ADMIN_GROUP`.
 
 You can also run the collector by hand:
 

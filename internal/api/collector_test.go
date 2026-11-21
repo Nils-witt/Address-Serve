@@ -12,70 +12,61 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	adminRole   = "collector-admin"
-	groupsClaim = "groups"
-)
+// adminGroup is the group the tests let manage collectors.
+const adminGroup = "collector-admins"
 
-func TestClaimContains(t *testing.T) {
+func TestInGroup(t *testing.T) {
 	t.Parallel()
 
-	claims := map[string]any{
-		"role":         adminRole,
-		groupsClaim:    []any{"users", adminRole},
-		"realm_access": map[string]any{"roles": []any{"offline", adminRole}},
-		"numbers":      []any{1, 2},
-	}
-
 	tests := []struct {
-		path string
-		want bool
+		name   string
+		claims map[string]any
+		want   bool
 	}{
-		{"role", true},
-		{groupsClaim, true},
-		{"realm_access.roles", true},
-		{"realm_access", false},
-		{"realm_access.roles.extra", false},
-		{"numbers", false},
-		{"missing", false},
-		{"role.sub", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			t.Parallel()
-
-			if got := claimContains(claims, tt.path, adminRole); got != tt.want {
-				t.Errorf("claimContains(%s) = %t, want %t", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestRequireAdmin(t *testing.T) {
-	t.Parallel()
-
-	admin := AdminClaim{Claim: groupsClaim, Value: "admins"}
-	tokenID := uuid.New()
-
-	tests := []struct {
-		name     string
-		claim    AdminClaim
-		p        principal
-		wantCode int
-		wantBody string
-	}{
-		{name: "admin", claim: admin, p: principal{Claims: map[string]any{groupsClaim: []any{"admins"}}}, wantCode: http.StatusOK},
-		{name: "not configured", p: principal{Claims: map[string]any{groupsClaim: []any{"admins"}}}, wantCode: http.StatusForbidden, wantBody: "disabled"},
-		{name: "without the claim", claim: admin, p: principal{Claims: map[string]any{groupsClaim: []any{"users"}}}, wantCode: http.StatusForbidden, wantBody: "requires the claim groups"},
-		{name: "API token", claim: admin, p: principal{APITokenID: &tokenID}, wantCode: http.StatusForbidden, wantBody: "API tokens"},
+		{name: "listed", claims: map[string]any{groupsClaim: []any{"users", adminGroup}}, want: true},
+		{name: "the only group, as a string", claims: map[string]any{groupsClaim: adminGroup}, want: true},
+		{name: "other groups", claims: map[string]any{groupsClaim: []any{"users"}}},
+		{name: "no groups claim", claims: map[string]any{"roles": []any{adminGroup}}},
+		{name: "not strings", claims: map[string]any{groupsClaim: []any{1, 2}}},
+		{name: "case differs", claims: map[string]any{groupsClaim: []any{"Collector-Admins"}}},
+		{name: "no claims at all"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			h := requireAdmin(tt.claim, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if got := inGroup(tt.claims, adminGroup); got != tt.want {
+				t.Errorf("inGroup = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRequireAdminGroup(t *testing.T) {
+	t.Parallel()
+
+	tokenID := uuid.New()
+	member := principal{Claims: map[string]any{groupsClaim: []any{adminGroup}}}
+
+	tests := []struct {
+		name     string
+		group    string
+		p        principal
+		wantCode int
+		wantBody string
+	}{
+		{name: "member", group: adminGroup, p: member, wantCode: http.StatusOK},
+		{name: "not configured", p: member, wantCode: http.StatusForbidden, wantBody: "set COLLECTOR_ADMIN_GROUP"},
+		{name: "not a member", group: adminGroup, p: principal{Claims: map[string]any{groupsClaim: []any{"users"}}}, wantCode: http.StatusForbidden, wantBody: "membership in the group"},
+		{name: "API token", group: adminGroup, p: principal{APITokenID: &tokenID}, wantCode: http.StatusForbidden, wantBody: "API tokens"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			h := requireAdminGroup(tt.group, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
 

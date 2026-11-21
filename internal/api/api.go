@@ -21,7 +21,7 @@ type Config struct {
 	UI http.Handler
 	// UIConfig is served to the web UI at GET /ui-config.
 	UIConfig UIConfig
-	// Collectors wires the collector routes, which need the admin claim.
+	// Collectors wires the collector routes, which need the admin group.
 	Collectors CollectorConfig
 }
 

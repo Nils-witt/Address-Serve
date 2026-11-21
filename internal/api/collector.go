@@ -18,7 +18,9 @@ import (
 type CollectorConfig struct {
 	Runner *collector.Runner
 	Store  *store.CollectorStore
-	Admin  AdminClaim
+	// AdminGroup is the group whose members may manage collectors. Empty
+	// lets nobody.
+	AdminGroup string
 }
 
 const (
@@ -43,7 +45,7 @@ func registerCollectorRoutes(mux *http.ServeMux, cfg CollectorConfig) {
 	}
 
 	for pattern, h := range routes {
-		mux.Handle(pattern, requireAdmin(cfg.Admin, h))
+		mux.Handle(pattern, requireAdminGroup(cfg.AdminGroup, h))
 	}
 }
 
