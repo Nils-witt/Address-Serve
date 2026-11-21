@@ -120,6 +120,12 @@ func displayName(claims jwt.MapClaims, sub string) string {
 func bearerToken(r *http.Request) (string, error) {
 	header := r.Header.Get("Authorization")
 	if header == "" {
+		// Browsers can't set headers on a WebSocket handshake, so the UI
+		// sends its token as a subprotocol instead.
+		if token, ok := webSocketToken(r); ok {
+			return token, nil
+		}
+
 		return "", errMissingAuthHeader
 	}
 

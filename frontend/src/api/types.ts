@@ -205,6 +205,14 @@ export interface CollectorRun {
   log?: string;
 }
 
+/** A message on the /api/collector-events WebSocket: the run started,
+ * changed phase, saved more of its log, or ended. The run comes without its
+ * issues and log. */
+export interface CollectorRunEvent {
+  type: 'run';
+  run: CollectorRun;
+}
+
 /** GET /ui-config: served before sign-in. */
 export interface UIConfig {
   oidc: {

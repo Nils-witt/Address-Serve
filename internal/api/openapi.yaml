@@ -1477,6 +1477,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/collector-events:
+    get:
+      summary: Follow runs live (WebSocket)
+      description: >-
+        Upgrades to a WebSocket on which the server sends a JSON
+        `CollectorRunEvent` text message whenever a run starts, changes
+        phase, saves more of its log, or ends. Runs come without their issues
+        and log; fetch /api/collector-runs/{runId} for those. The client sends
+        nothing. Updates are not replayed, so reload the runs on every
+        (re)connect.
+
+
+        Browsers can't set headers on a WebSocket, so the token may instead
+        be offered as the subprotocol `bearer.<token>`. The client must also
+        offer `address-serv.v1`, which the server picks; for example
+        `new WebSocket(url, ["address-serv.v1", "bearer." + token])`.
+
+
+        The server closes the connection with code 4001 when the token it was
+        opened with expires, and with 1013 (try again later) when the client
+        falls behind; reconnect in both cases.
+      operationId: collectorEvents
+      tags: [collectors]
+      parameters:
+        - name: Sec-WebSocket-Protocol
+          in: header
+          required: true
+          description: "`address-serv.v1`, and `bearer.<token>` unless an Authorization header is sent."
+          schema:
+            type: string
+          example: address-serv.v1, bearer.eyJhbGciOi...
+      responses:
+        "101":
+          description: >-
+            Switching to the WebSocket. Each message is a
+            `CollectorRunEvent`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorRunEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "426":
+          description: Not a WebSocket handshake
+
 components:
   parameters:
     CollectorID:
@@ -2098,6 +2145,17 @@ components:
           format: uuid
           description: The stored row the issue is about
 
+    CollectorRunEvent:
+      type: object
+      description: A message on /api/collector-events.
+      required: [type, run]
+      properties:
+        type:
+          type: string
+          enum: [run]
+          description: "`run`: the run started, changed phase, saved more of its log, or ended."
+        run:
+          $ref: "#/components/schemas/CollectorRun"
     CollectorRun:
       type: object
       required: [id, collectorId, status, triggeredBy, startedAt]

@@ -147,6 +147,7 @@
     "revokeMessage": "Revoke the token \"{{name}}\"? Programs using it will lose access immediately."
   },
   "collectors": {
+    "liveUpdatesLost": "Live updates are interrupted. Reconnecting…",
     "managedBy": "Collector {{id}}",
     "managedHint": "Kept in sync by the collector \"{{id}}\". Only its runs can change this.",
     "title": "Collectors",

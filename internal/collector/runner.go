@@ -70,11 +70,23 @@ type Runner struct {
 	mu     sync.Mutex
 	cancel map[uuid.UUID]context.CancelCauseFunc
 	wg     sync.WaitGroup
+
+	events *broadcaster
 }
 
 // NewRunner returns a Runner that keeps its state in cs.
 func NewRunner(cs *store.CollectorStore, cfg Config) *Runner {
-	return &Runner{store: cs, cfg: cfg, cancel: map[uuid.UUID]context.CancelCauseFunc{}}
+	return &Runner{
+		store: cs, cfg: cfg, cancel: map[uuid.UUID]context.CancelCauseFunc{}, events: newBroadcaster(),
+	}
+}
+
+// Subscribe returns a channel that receives a run, without its issues and
+// log, whenever it starts, changes phase, saves more of its log, or ends.
+// The channel is closed after unsubscribe, or early when the subscriber
+// falls behind; it then has missed updates and should reload the runs.
+func (r *Runner) Subscribe() (runs <-chan store.CollectorRun, unsubscribe func()) {
+	return r.events.subscribe()
 }
 
 // Reload scans the collectors folder, records what it found, and returns
@@ -124,6 +136,8 @@ func (r *Runner) Start(ctx context.Context, collectorID, triggeredBy string) (st
 	r.cancel[run.ID] = cancel
 	r.mu.Unlock()
 
+	r.events.publish(run)
+
 	r.wg.Go(func() {
 		defer func() {
 			r.mu.Lock()
@@ -169,11 +183,13 @@ func (r *Runner) execute(ctx context.Context, run store.CollectorRun, c store.Co
 	}
 
 	// Recording the outcome must not be cancelled with the run.
-	_, err := r.store.FinishRun(context.WithoutCancel(ctx), run.ID, outcome, r.cfg.RunHistory)
+	finished, err := r.store.FinishRun(context.WithoutCancel(ctx), run.ID, outcome, r.cfg.RunHistory)
 	if err != nil {
 		log.Printf("collector %s: record run %s: %v", c.ID, run.ID, err)
 		return
 	}
+
+	r.events.publish(finished)
 
 	log.Printf("collector %s: run %s %s", c.ID, run.ID, outcome.Status)
 }
@@ -191,7 +207,7 @@ func (r *Runner) collectAndSync(ctx context.Context, run store.CollectorRun, c s
 	timeout := fmt.Errorf("timed out after %s", r.cfg.Timeout)
 	collectCtx, cancel := context.WithTimeoutCause(ctx, r.cfg.Timeout, timeout)
 	logBuf := &tailBuffer{max: maxLogBytes}
-	stopLog := r.streamLog(ctx, run.ID, logBuf)
+	stopLog := r.streamLog(ctx, run, logBuf)
 	result, err := runCommand(collectCtx, c.Path, []string{"collect"}, env, logBuf)
 
 	// The log is final once the process is gone; FinishRun saves it. Waiting
@@ -221,6 +237,9 @@ func (r *Runner) collectAndSync(ctx context.Context, run store.CollectorRun, c s
 
 	if err := r.store.SetRunPhase(ctx, run.ID, store.PhaseApplying); err != nil {
 		log.Printf("collector %s: run %s: record phase: %v", c.ID, run.ID, err)
+	} else {
+		run.Phase = new(store.PhaseApplying)
+		r.events.publish(run)
 	}
 
 	stats, issues, err := r.store.Sync(ctx, c.ID, out, store.SyncOptions{GeoMaxDistanceMeters: r.cfg.GeoMaxDistanceMeters})
@@ -235,9 +254,10 @@ func (r *Runner) collectAndSync(ctx context.Context, run store.CollectorRun, c s
 }
 
 // streamLog saves buf as the log of the running run every flush interval
-// while it changes, so the log can be read before the run ends. The returned
-// func stops it and waits until it has stopped.
-func (r *Runner) streamLog(ctx context.Context, runID uuid.UUID, buf *tailBuffer) (stop func()) {
+// while it changes, so the log can be read before the run ends, and tells
+// subscribers each time. The returned func stops it and waits until it has
+// stopped.
+func (r *Runner) streamLog(ctx context.Context, run store.CollectorRun, buf *tailBuffer) (stop func()) {
 	interval := r.cfg.LogFlushInterval
 	if interval <= 0 {
 		interval = logFlushInterval
@@ -267,12 +287,14 @@ func (r *Runner) streamLog(ctx context.Context, runID uuid.UUID, buf *tailBuffer
 				continue
 			}
 
-			if err := r.store.SetRunLog(ctx, runID, s); err != nil {
-				log.Printf("run %s: save the log: %v", runID, err)
+			if err := r.store.SetRunLog(ctx, run.ID, s); err != nil {
+				log.Printf("run %s: save the log: %v", run.ID, err)
 				continue
 			}
 
 			saved = writes
+
+			r.events.publish(run)
 		}
 	})
 

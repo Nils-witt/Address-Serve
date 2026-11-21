@@ -147,6 +147,7 @@
     "revokeMessage": "Den Token \"{{name}}\" widerrufen? Programme, die ihn nutzen, verlieren sofort den Zugriff."
   },
   "collectors": {
+    "liveUpdatesLost": "Live-Aktualisierungen sind unterbrochen. Verbindung wird wiederhergestellt…",
     "managedBy": "Collector {{id}}",
     "managedHint": "Wird vom Collector „{{id}}“ synchronisiert. Nur seine Läufe können das ändern.",
     "title": "Collectors",

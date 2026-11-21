@@ -6,7 +6,8 @@ import { defineConfig } from 'vite';
 const backendTarget = 'http://localhost:8080';
 const proxiedPaths = ['/api', '/ui-config', '/healthz', '/docs'];
 
-const targetConfig = { target: backendTarget, changeOrigin: true };
+// `ws` forwards WebSocket handshakes too (/api/collector-events).
+const targetConfig = { target: backendTarget, changeOrigin: true, ws: true };
 
 export default defineConfig({
   // The Go server serves the app under /ui/ (see internal/api/ui.go).

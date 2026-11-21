@@ -519,8 +519,17 @@ Where the implementation departs from, or adds to, the plan above:
   server's OS).
 - **Live log.** While a run is collecting, the runner saves the stderr tail to
   the run every 2 s (`SetRunLog`, only while the run is `running`), so
-  `GET /api/collector-runs/{runId}` and the UI, which polls running runs, show
-  the log before the run ends. `FinishRun` still writes the final log.
+  `GET /api/collector-runs/{runId}` and the UI show the log before the run
+  ends. `FinishRun` still writes the final log.
+- **Live updates over a WebSocket, not polling.** `GET /api/collector-events`
+  pushes a run (without issues and log) whenever it starts, changes phase,
+  saves more log, or ends. The UI patches the collector list and run history
+  from it and refetches an open run's details, so nothing polls. The browser
+  can't set an Authorization header on a WebSocket, so the token travels as
+  the subprotocol `bearer.<token>`. Updates aren't replayed: the UI reloads on
+  every (re)connect, and a subscriber that falls behind is dropped (close code
+  1013) rather than slowing runs down. The connection closes with 4001 when
+  its token expires.
 - **Test helper.** `internal/store/storetest.OpenIsolated` gives tests a
   migrated database in a schema of their own. Tests that reload collectors
   need it, because a reload marks every collector it doesn't find as missing.

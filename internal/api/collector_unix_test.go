@@ -6,12 +6,15 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/nils-witt/address-serve/internal/collector"
@@ -230,4 +233,91 @@ func TestCollectorAPI_Cancel(t *testing.T) {
 	f.expect(http.MethodPost, "/api/collector-runs/"+run.ID.String()+"/cancel", admin, "", http.StatusConflict, nil)
 	f.expect(http.MethodPost, "/api/collector-runs/00000000-0000-0000-0000-000000000000/cancel", admin, "", http.StatusNotFound, nil)
 	f.expect(http.MethodGet, "/api/collector-runs/not-a-uuid", admin, "", http.StatusBadRequest, nil)
+}
+
+func TestCollectorAPI_Events(t *testing.T) {
+	t.Parallel()
+
+	f := newCollectorAPIFixture(t)
+	f.configureDemoAfterReload()
+
+	server := httptest.NewServer(f.handler)
+	t.Cleanup(server.Close)
+
+	url := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/collector-events"
+
+	if _, status, err := dialEvents(t, url, eventsProtocol, tokenProtocolPrefix+f.userJWT); err == nil || status != http.StatusForbidden {
+		t.Fatalf("dial as non-admin: err %v, status %d, want 403", err, status)
+	}
+
+	if _, status, err := dialEvents(t, url, eventsProtocol); err == nil || status != http.StatusUnauthorized {
+		t.Fatalf("dial without a token: err %v, status %d, want 401", err, status)
+	}
+
+	conn, _, err := dialEvents(t, url, eventsProtocol, tokenProtocolPrefix+f.adminJWT)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = conn.CloseNow() }()
+
+	if conn.Subprotocol() != eventsProtocol {
+		t.Fatalf("subprotocol = %q, want %q", conn.Subprotocol(), eventsProtocol)
+	}
+
+	var started store.CollectorRun
+	f.expect(http.MethodPost, "/api/collectors/demo/runs", f.adminJWT, "", http.StatusAccepted, &started)
+
+	statuses := readRunStatuses(t, conn, started.ID.String())
+	if statuses[0] != store.RunRunning || statuses[len(statuses)-1] != store.RunSucceeded {
+		t.Errorf("statuses = %v, want running first and succeeded last", statuses)
+	}
+}
+
+// dialEvents opens the events WebSocket offering protocols, and returns the
+// handshake's HTTP status, if there was a response.
+func dialEvents(t *testing.T, url string, protocols ...string) (*websocket.Conn, int, error) {
+	t.Helper()
+
+	conn, res, err := websocket.Dial(t.Context(), url, &websocket.DialOptions{Subprotocols: protocols})
+	if res == nil {
+		return conn, 0, err
+	}
+
+	if res.Body != nil { // nil after a successful handshake
+		_ = res.Body.Close()
+	}
+
+	return conn, res.StatusCode, err
+}
+
+// readRunStatuses reads run events for runID until the run ends, and
+// returns the statuses they carried.
+func readRunStatuses(t *testing.T, conn *websocket.Conn, runID string) []store.RunStatus {
+	t.Helper()
+
+	var statuses []store.RunStatus
+
+	for {
+		var event collectorEvent
+		if err := wsjson.Read(t.Context(), conn, &event); err != nil {
+			t.Fatalf("read event after %v: %v", statuses, err)
+		}
+
+		if event.Type != "run" || event.Run.ID.String() != runID || event.Run.Log != "" {
+			t.Fatalf("event = %+v, want a run event for %s without its log", event, runID)
+		}
+
+		statuses = append(statuses, event.Run.Status)
+		if event.Run.Status != store.RunRunning {
+			return statuses
+		}
+	}
+}
+
+// configureDemoAfterReload discovers the collectors and configures demo.
+func (f collectorAPIFixture) configureDemoAfterReload() {
+	f.t.Helper()
+	f.expect(http.MethodPost, "/api/collectors/reload", f.adminJWT, "", http.StatusOK, nil)
+	f.configureDemo()
 }

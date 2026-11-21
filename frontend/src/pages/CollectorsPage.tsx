@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Alert } from '@mui/material';
 import type { Collector, CollectorRun, CollectorSettingsInput } from '../api/types';
 import ErrorBanner from '../components/ErrorBanner';
 import CollectorDeleteDialog from '../features/collectors/CollectorDeleteDialog';
 import CollectorRunsDialog from '../features/collectors/CollectorRunsDialog';
 import CollectorSettingsDialog from '../features/collectors/CollectorSettingsDialog';
 import { useApi } from '../hooks/useApi';
+import { useCollectorEvents } from '../hooks/useCollectorEvents';
 import { useCollectors } from '../hooks/useCollectors';
 import { useConfirm } from '../hooks/useConfirm';
 import { useInvalidate } from '../hooks/useInvalidate';
@@ -23,6 +25,7 @@ export default function CollectorsPage() {
   const confirm = useConfirm();
   const invalidate = useInvalidate();
   const { data: collectors, error: loadError, loading } = useCollectors();
+  const live = useCollectorEvents();
 
   const [open, setOpen] = useState<Open | null>(null);
   // Bumped on each opening, so a dialog remounts with fresh state.
@@ -106,6 +109,11 @@ export default function CollectorsPage() {
   return (
     <>
       <ErrorBanner message={error ?? loadError} />
+      {live === 'reconnecting' && (
+        <Alert severity="warning" className="error-banner">
+          {t('collectors.liveUpdatesLost')}
+        </Alert>
+      )}
       <CollectorsTable
         collectors={collectors}
         loading={loading}

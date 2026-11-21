@@ -5,23 +5,17 @@ import type { Collector, CollectorRun } from '../api/types';
 import { useApi } from './useApi';
 import { useApiQuery } from './useApiQuery';
 
-/** How often to look again while a run is in progress. */
-const RUN_POLL_MS = 2000;
-
 const NO_COLLECTORS: Collector[] = [];
 const NO_RUNS: CollectorRun[] = [];
 
-const whileRunning = (running: boolean) => (running ? RUN_POLL_MS : false);
-
-/** Every known collector, refreshed while one of them runs. */
+/** Every known collector. Kept current while a run goes on by
+ * useCollectorEvents, which must be mounted alongside. */
 export function useCollectors() {
   const api = useApi();
   return useApiQuery(
     {
       queryKey: queryKeys.collectors,
       queryFn: () => api.listCollectors(),
-      pollInterval: (collectors) =>
-        whileRunning(collectors?.some((c) => c.lastRun?.status === 'running') ?? false),
     },
     NO_COLLECTORS,
   );
@@ -42,7 +36,7 @@ export function useCollectorAccess(): boolean {
   return isSuccess || (error !== null && !refused);
 }
 
-/** A collector's runs, newest first, refreshed while one is running. */
+/** A collector's runs, newest first, kept current by useCollectorEvents. */
 export function useCollectorRuns(collectorId: string | null) {
   const api = useApi();
   return useApiQuery(
@@ -51,13 +45,13 @@ export function useCollectorRuns(collectorId: string | null) {
       queryFn: () => api.listCollectorRuns(collectorId ?? ''),
       enabled: collectorId !== null,
       fresh: true,
-      pollInterval: (runs) => whileRunning(runs?.some((r) => r.status === 'running') ?? false),
     },
     NO_RUNS,
   );
 }
 
-/** One run with its issues and log, refreshed until it ends. */
+/** One run with its issues and log, refetched by useCollectorEvents whenever
+ * the run changes. */
 export function useCollectorRun(runId: string | null) {
   const api = useApi();
   return useApiQuery<CollectorRun | null>(
@@ -66,7 +60,6 @@ export function useCollectorRun(runId: string | null) {
       queryFn: () => api.getCollectorRun(runId ?? ''),
       enabled: runId !== null,
       fresh: true,
-      pollInterval: (run) => whileRunning(run?.status === 'running'),
     },
     null,
   );

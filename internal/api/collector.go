@@ -42,6 +42,7 @@ func registerCollectorRoutes(mux *http.ServeMux, cfg CollectorConfig) {
 		"GET /api/collectors/{id}/runs":           handleListRuns(cfg.Store),
 		"GET /api/collector-runs/{runId}":         handleGetRun(cfg.Store),
 		"POST /api/collector-runs/{runId}/cancel": handleCancelRun(cfg),
+		"GET /api/collector-events":               handleCollectorEvents(cfg.Runner),
 	}
 
 	for pattern, h := range routes {

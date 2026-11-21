@@ -72,7 +72,19 @@ func NewHandler(
 	// gzip shrinks the unfiltered street list ~5x (833 KB → 156 KB for 5,000
 	// streets) and the UI bundles ~3x; responses under 1 KB, already
 	// compressed content types and range requests are passed through as is.
-	return loggingMiddleware(gzhttp.GzipHandler(corsMiddleware(cfg.CORSAllowedOrigin)(root)))
+	// WebSocket handshakes skip it: their connection is hijacked, and
+	// messages are not HTTP bodies it could compress.
+	inner := corsMiddleware(cfg.CORSAllowedOrigin)(root)
+	gzipped := gzhttp.GzipHandler(inner)
+
+	return loggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isWebSocketUpgrade(r) {
+			inner.ServeHTTP(w, r)
+			return
+		}
+
+		gzipped.ServeHTTP(w, r)
+	}))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -28,6 +28,15 @@ import type {
   UIConfig,
 } from './types';
 
+/** The subprotocol of /api/collector-events, and the prefix of the one that
+ * carries the bearer token (see the OpenAPI spec). */
+const EVENTS_PROTOCOL = 'address-serv.v1';
+const TOKEN_PROTOCOL_PREFIX = 'bearer.';
+
+/** Close code of /api/collector-events once the token it was opened with
+ * expires; reconnecting picks up the renewed one. */
+export const EVENTS_CLOSE_TOKEN_EXPIRED = 4001;
+
 export class ApiError extends Error {
   /** HTTP status of the failed response; 0 if there was none. */
   readonly status: number;
@@ -285,5 +294,15 @@ export class ApiClient {
     await this.request(`/api/collector-runs/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
     });
+  }
+
+  /** Opens the WebSocket of run updates; each message is a CollectorRunEvent.
+   * A WebSocket can't carry an Authorization header, so the token goes as a
+   * subprotocol next to the one the server picks. */
+  openCollectorEvents(): WebSocket {
+    const url = new URL('/api/collector-events', window.location.href);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const token = this.options.getToken();
+    return new WebSocket(url, [EVENTS_PROTOCOL, ...(token ? [TOKEN_PROTOCOL_PREFIX + token] : [])]);
   }
 }
