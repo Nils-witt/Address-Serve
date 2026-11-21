@@ -9,8 +9,16 @@ export interface StreetInput {
   longitude: number;
 }
 
-export interface Street extends StreetInput {
+/** Set on rows a collector owns; only its runs may change them, so the API
+ * refuses edits and deletes with a 409. */
+export interface CollectorOwned {
+  collectorId?: string;
+}
+
+export interface Street extends StreetInput, CollectorOwned {
   id: string;
+  /** The street's ID in its collector's source. */
+  externalId?: string;
 }
 
 export interface StreetFilter {
@@ -34,8 +42,10 @@ export interface HouseNumberInput {
   longitude: number;
 }
 
-export interface HouseNumber extends HouseNumberInput {
+export interface HouseNumber extends HouseNumberInput, CollectorOwned {
   id: string;
+  /** The house number's ID in its collector's source. */
+  externalId?: string;
 }
 
 export interface HouseNumberFilter {
@@ -65,7 +75,7 @@ export interface GeoObjectInput {
   externalId?: string | null;
 }
 
-export interface GeoObject extends GeoObjectInput {
+export interface GeoObject extends GeoObjectInput, CollectorOwned {
   id: string;
 }
 
@@ -102,6 +112,97 @@ export interface APIToken {
 /** POST /api/tokens: the only response that carries the secret. */
 export interface CreatedAPIToken extends APIToken {
   token: string;
+}
+
+/** A plain string for every language, or one string per language code. */
+export type LocalizedText = string | Record<string, string>;
+
+export type SettingType = 'string' | 'secret' | 'integer' | 'number' | 'boolean';
+
+export type SettingValue = string | number | boolean;
+
+export interface CollectorSetting {
+  key: string;
+  label: LocalizedText;
+  description?: LocalizedText;
+  type: SettingType;
+  required?: boolean;
+  /** Used when no value is set; never present for secrets. */
+  default?: SettingValue;
+}
+
+export type CollectorStatus = 'ok' | 'invalid' | 'missing';
+
+export interface Collector {
+  /** The executable's filename up to its first dot. */
+  id: string;
+  path: string;
+  status: CollectorStatus;
+  /** Why an invalid collector was rejected. */
+  error?: string;
+  name: string;
+  version: string;
+  description?: LocalizedText;
+  settingsSchema: CollectorSetting[];
+  /** Values of the settings that are set, except secrets. */
+  settings: Record<string, SettingValue>;
+  /** Keys of the secrets that have a value. */
+  secretsSet: string[];
+  discoveredAt: string;
+  updatedAt: string;
+  lastRun?: CollectorRun;
+}
+
+/** PUT /api/collectors/{id}/settings: absent settings are unset, except
+ * secrets, which are kept; null unsets a secret. */
+export type CollectorSettingsInput = Record<string, SettingValue | null>;
+
+export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+export interface EntityStats {
+  created: number;
+  updated: number;
+  unchanged: number;
+  adopted: number;
+  deleted: number;
+  released: number;
+  skipped: number;
+  conflicts: number;
+}
+
+export interface SyncStats {
+  streets: EntityStats;
+  houseNumbers: EntityStats;
+  geoObjects: EntityStats;
+}
+
+export type IssueKind = 'skipped' | 'conflict' | 'adopted' | 'released';
+
+export interface SyncIssue {
+  kind: IssueKind;
+  entity: 'address' | 'geoObject' | 'street' | 'houseNumber';
+  /** Position of the entry in the collector's addresses or geoObjects. */
+  index?: number;
+  key: string;
+  reason: string;
+  rowId?: string;
+}
+
+export interface CollectorRun {
+  id: string;
+  collectorId: string;
+  status: RunStatus;
+  phase?: 'collecting' | 'applying';
+  triggeredBy: string;
+  startedAt: string;
+  finishedAt?: string;
+  exitCode?: number;
+  error?: string;
+  stats?: SyncStats;
+  /** Only on a single run: the first 1000 of each kind. */
+  issues?: SyncIssue[];
+  /** Only on a single run: the tail of the collector's stderr. */
+  log?: string;
 }
 
 /** GET /ui-config: served before sign-in. */

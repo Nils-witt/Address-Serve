@@ -4,6 +4,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { useTranslation } from 'react-i18next';
 import type { Street } from '../../api/types';
 import { formatCoordinates, osmUrl } from '../../lib/format';
+import CollectorChip from '../../components/CollectorChip';
 import './StreetDetails.scss';
 
 export default function StreetDetails({
@@ -38,12 +39,18 @@ export default function StreetDetails({
         </Typography>
       </div>
       <Stack direction="row" spacing={1} className="street-details__actions">
-        <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>
-          {t('common.edit')}
-        </Button>
-        <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
-          {t('common.delete')}
-        </Button>
+        {street.collectorId ? (
+          <CollectorChip collectorId={street.collectorId} />
+        ) : (
+          <>
+            <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>
+              {t('common.edit')}
+            </Button>
+            <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
+              {t('common.delete')}
+            </Button>
+          </>
+        )}
       </Stack>
     </Paper>
   );

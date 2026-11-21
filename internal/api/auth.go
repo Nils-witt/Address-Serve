@@ -31,6 +31,8 @@ type principal struct {
 	// APITokenID is set when the request carried an API token rather than an
 	// OIDC token.
 	APITokenID *uuid.UUID
+	// Claims are the verified claims of an OIDC token; nil for API tokens.
+	Claims jwt.MapClaims
 }
 
 // principalFrom returns the principal authMiddleware stored in ctx.
@@ -84,7 +86,7 @@ func oidcPrincipal(verifier *OIDCVerifier, tokenString string) (principal, error
 	// needs a subject (see requireTokenOwner).
 	sub, _ := claims.GetSubject()
 
-	return principal{Subject: sub, Name: displayName(claims, sub)}, nil
+	return principal{Subject: sub, Name: displayName(claims, sub), Claims: claims}, nil
 }
 
 func apiTokenPrincipal(ctx context.Context, tokens apiTokenAuthenticator, secret string) (principal, error) {

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Checkbox,
-  IconButton,
   Link,
   Paper,
   Table,
@@ -12,12 +11,10 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import { useTranslation } from 'react-i18next';
+import RowActions from '../../components/RowActions';
 import type { GeoObject, Street } from '../../api/types';
 import { useHouseNumbersById } from '../../hooks/useGeoObjects';
 import { formatCoordinates, formatHouseNumber, osmUrl } from '../../lib/format';
@@ -66,10 +63,12 @@ export default function GeoObjectsListTable({
   const houseNumbersById = useHouseNumbersById(streetIds);
 
   // The header checkbox covers every row matching the filter, not just this
-  // page, so a whole group can be selected at once.
-  const allSelected = rows.length > 0 && selected.size === rows.length;
+  // page, so a whole group can be selected at once. Rows a collector owns
+  // can't be deleted here, so they can't be selected.
+  const selectable = rows.filter((r) => !r.geoObject.collectorId);
+  const allSelected = selectable.length > 0 && selected.size === selectable.length;
   const toggleAll = () =>
-    onSelectedChange(allSelected ? new Set() : new Set(rows.map((r) => r.geoObject.id)));
+    onSelectedChange(allSelected ? new Set() : new Set(selectable.map((r) => r.geoObject.id)));
   const toggle = (id: string) => {
     const next = new Set(selected);
     if (!next.delete(id)) next.add(id);
@@ -87,7 +86,7 @@ export default function GeoObjectsListTable({
                   size="small"
                   checked={allSelected}
                   indeterminate={selected.size > 0 && !allSelected}
-                  disabled={rows.length === 0}
+                  disabled={selectable.length === 0}
                   onChange={toggleAll}
                   slotProps={{ input: { 'aria-label': t('geoObjects.selectAll') } }}
                 />
@@ -113,6 +112,7 @@ export default function GeoObjectsListTable({
                     <Checkbox
                       size="small"
                       checked={selected.has(g.id)}
+                      disabled={Boolean(g.collectorId)}
                       onChange={() => toggle(g.id)}
                       slotProps={{
                         input: { 'aria-label': t('geoObjects.select', { name: g.name }) },
@@ -138,16 +138,11 @@ export default function GeoObjectsListTable({
                     </Link>
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title={t('common.edit')}>
-                      <IconButton size="small" onClick={() => onEdit(row)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('common.delete')}>
-                      <IconButton size="small" color="error" onClick={() => onDelete(row)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <RowActions
+                      collectorId={g.collectorId}
+                      onEdit={() => onEdit(row)}
+                      onDelete={() => onDelete(row)}
+                    />
                   </TableCell>
                 </TableRow>
               );

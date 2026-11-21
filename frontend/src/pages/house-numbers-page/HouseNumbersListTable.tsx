@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
-  IconButton,
   Link,
   Paper,
   Table,
@@ -11,12 +10,10 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import { useTranslation } from 'react-i18next';
+import RowActions from '../../components/RowActions';
 import type { HouseNumber, Street } from '../../api/types';
 import { formatCoordinates, formatHouseNumber, osmUrl } from '../../lib/format';
 import { ROUTES } from '../../routes';
@@ -88,20 +85,11 @@ export default function HouseNumbersListTable({
                   </Link>
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title={t('common.edit')}>
-                    <IconButton size="small" onClick={() => onEdit(h)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('common.delete')}>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => onDelete({ houseNumber: h, street })}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  <RowActions
+                    collectorId={h.collectorId}
+                    onEdit={() => onEdit(h)}
+                    onDelete={() => onDelete({ houseNumber: h, street })}
+                  />
                 </TableCell>
               </TableRow>
             ))}

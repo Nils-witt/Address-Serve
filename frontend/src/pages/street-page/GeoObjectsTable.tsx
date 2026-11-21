@@ -1,6 +1,5 @@
 import {
   Button,
-  IconButton,
   Link,
   Paper,
   Table,
@@ -9,13 +8,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import { useTranslation } from 'react-i18next';
+import RowActions from '../../components/RowActions';
 import type { GeoObject, HouseNumber } from '../../api/types';
 import { formatCoordinates, formatHouseNumber, osmUrl } from '../../lib/format';
 import './GeoObjectsTable.scss';
@@ -80,16 +77,11 @@ export default function GeoObjectsTable({
                     </Link>
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title={t('common.edit')}>
-                      <IconButton size="small" onClick={() => onEdit(g)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('common.delete')}>
-                      <IconButton size="small" color="error" onClick={() => onDelete(g)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <RowActions
+                      collectorId={g.collectorId}
+                      onEdit={() => onEdit(g)}
+                      onDelete={() => onDelete(g)}
+                    />
                   </TableCell>
                 </TableRow>
               );

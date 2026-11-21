@@ -11,6 +11,9 @@ export const queryKeys = {
   allHouseNumbers: (filter: HouseNumberFilter) => ['house-numbers', 'list', filter] as const,
   geoObjects: (filter: GeoObjectFilter) => ['geo-objects', 'list', filter] as const,
   apiTokens: ['api-tokens'] as const,
+  collectors: ['collectors', 'list'] as const,
+  collectorRuns: (collectorId: string) => ['collectors', collectorId, 'runs'] as const,
+  collectorRun: (runId: string) => ['collector-runs', runId] as const,
 
   // Prefixes covering many keys at once, for invalidating a whole family
   // after a mutation.
@@ -22,5 +25,15 @@ export const queryKeys = {
     houseNumbers: [['house-numbers'], ['geo-objects']] as const,
     geoObjects: [['geo-objects']] as const,
     apiTokens: [['api-tokens']] as const,
+    // A run changes rows of every kind.
+    collectors: [
+      ['collectors'],
+      ['collector-runs'],
+      ['streets'],
+      ['cities'],
+      ['districts'],
+      ['house-numbers'],
+      ['geo-objects'],
+    ] as const,
   },
 };

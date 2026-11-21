@@ -11,6 +11,9 @@
 import type {
   APIToken,
   APITokenInput,
+  Collector,
+  CollectorRun,
+  CollectorSettingsInput,
   CreatedAPIToken,
   District,
   GeoObject,
@@ -231,5 +234,56 @@ export class ApiClient {
 
   deleteAPIToken(id: string): Promise<void> {
     return this.del(`/api/tokens/${encodeURIComponent(id)}`);
+  }
+
+  // ---- collectors (need the admin claim; 403 otherwise) -------------------
+
+  listCollectors(): Promise<Collector[]> {
+    return this.getJson('/api/collectors');
+  }
+
+  /** Rescans the collectors folder; resolves to every known collector. */
+  async reloadCollectors(): Promise<Collector[]> {
+    const res = await this.request('/api/collectors/reload', { method: 'POST' });
+    return (await res.json()) as Collector[];
+  }
+
+  updateCollectorSettings(id: string, input: CollectorSettingsInput): Promise<Collector> {
+    return this.sendJsonForJson(`/api/collectors/${encodeURIComponent(id)}/settings`, 'PUT', input);
+  }
+
+  /** Only for missing or invalid collectors. Their rows become manual ones,
+   * unless `deleteData` is set. */
+  deleteCollector(id: string, deleteData: boolean): Promise<void> {
+    return this.del(
+      withQuery(`/api/collectors/${encodeURIComponent(id)}`, {
+        deleteData: deleteData ? 'true' : undefined,
+      }),
+    );
+  }
+
+  /** Resolves to the run, which keeps going in the background. */
+  async startCollectorRun(id: string): Promise<CollectorRun> {
+    const res = await this.request(`/api/collectors/${encodeURIComponent(id)}/runs`, {
+      method: 'POST',
+    });
+    return (await res.json()) as CollectorRun;
+  }
+
+  /** Newest first, without issues and logs. */
+  listCollectorRuns(id: string): Promise<CollectorRun[]> {
+    return this.getJson(
+      withQuery(`/api/collectors/${encodeURIComponent(id)}/runs`, { limit: '50' }),
+    );
+  }
+
+  getCollectorRun(runId: string): Promise<CollectorRun> {
+    return this.getJson(`/api/collector-runs/${encodeURIComponent(runId)}`);
+  }
+
+  async cancelCollectorRun(runId: string): Promise<void> {
+    await this.request(`/api/collector-runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+    });
   }
 }

@@ -19,7 +19,8 @@
     "apiTokens": "API-Tokens",
     "logout": "Abmelden",
     "openNavMenu": "Navigationsmenü öffnen",
-    "geoObjects": "Geo-Objekte"
+    "geoObjects": "Geo-Objekte",
+    "collectors": "Collectors"
   },
   "auth": {
     "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an."
@@ -144,5 +145,89 @@
     "revoke": "Widerrufen",
     "revokeTitle": "Token widerrufen?",
     "revokeMessage": "Den Token \"{{name}}\" widerrufen? Programme, die ihn nutzen, verlieren sofort den Zugriff."
+  },
+  "collectors": {
+    "managedBy": "Collector {{id}}",
+    "managedHint": "Wird vom Collector „{{id}}“ synchronisiert. Nur seine Läufe können das ändern.",
+    "title": "Collectors",
+    "intro": "Collectors sind Programme im Collector-Ordner, die Adressen aus einer Quelle abrufen. Ein Lauf gleicht die Straßen, Hausnummern und Geo-Objekte des Collectors an das an, was er liefert.",
+    "reload": "Ordner neu einlesen",
+    "collector": "Collector",
+    "status": "Status",
+    "version": "Version",
+    "lastRun": "Letzter Lauf",
+    "neverRun": "Noch nie gelaufen",
+    "summary": "{{created}} angelegt, {{updated}} aktualisiert, {{deleted}} gelöscht, {{problems}} übersprungen oder im Konflikt",
+    "collectorStatus": {
+      "ok": "Bereit",
+      "invalid": "Ungültig",
+      "missing": "Fehlt"
+    },
+    "runStatus": {
+      "running": "Läuft",
+      "succeeded": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    },
+    "phase": {
+      "collecting": "sammelt",
+      "applying": "übernimmt"
+    },
+    "run": "Jetzt ausführen",
+    "cancel": "Lauf abbrechen",
+    "cancelTitle": "Lauf abbrechen?",
+    "cancelMessage": "Der Collector wird gestoppt, und nichts von dem, was er geliefert hat, wird übernommen.",
+    "settings": "Einstellungen",
+    "settingsTitle": "Einstellungen von {{name}}",
+    "secretKeep": "Gesetzt. Leer lassen, um den Wert zu behalten.",
+    "secretClear": "Gespeicherten Wert entfernen",
+    "invalidInteger": "Gib eine ganze Zahl ein.",
+    "invalidNumber": "Gib eine Zahl ein.",
+    "history": "Läufe",
+    "historyTitle": "Läufe von {{name}}",
+    "allRuns": "Alle Läufe",
+    "noRuns": "Dieser Collector ist noch nicht gelaufen.",
+    "started": "Gestartet",
+    "triggeredBy": "Gestartet von",
+    "result": "Ergebnis",
+    "startedBy": "Gestartet {{date}} von {{name}}",
+    "finished": "beendet {{date}}",
+    "exitCode": "Exit-Code {{code}}",
+    "stats": {
+      "created": "Angelegt",
+      "updated": "Aktualisiert",
+      "unchanged": "Unverändert",
+      "adopted": "Übernommen",
+      "deleted": "Gelöscht",
+      "released": "Freigegeben",
+      "skipped": "Übersprungen",
+      "conflicts": "Konflikte"
+    },
+    "entities": {
+      "streets": "Straßen",
+      "houseNumbers": "Hausnummern",
+      "geoObjects": "Geo-Objekte",
+      "address": "Adresse",
+      "geoObject": "Geo-Objekt",
+      "street": "Straße",
+      "houseNumber": "Hausnummer"
+    },
+    "issues_one": "{{count}} Hinweis",
+    "issues_other": "{{count}} Hinweise",
+    "issueKind": "Art",
+    "issueEntry": "Eintrag",
+    "issueReason": "Grund",
+    "issueKinds": {
+      "skipped": "Übersprungen",
+      "conflict": "Konflikt",
+      "adopted": "Übernommen",
+      "released": "Freigegeben"
+    },
+    "log": "Log",
+    "logEmpty": "Der Collector hat nichts in sein Log geschrieben.",
+    "empty": "Keine Collectors gefunden. Lege ausführbare Dateien in den Collector-Ordner und lies ihn neu ein.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteMessage": "Seine Einstellungen und Läufe werden gelöscht. Seine Straßen, Hausnummern und Geo-Objekte werden zu manuellen Einträgen, die hier bearbeitet werden können, außer du löschst sie mit.",
+    "deleteData": "Auch seine Einträge löschen (Einträge, von denen andere abhängen, werden stattdessen manuell)"
   }
 }

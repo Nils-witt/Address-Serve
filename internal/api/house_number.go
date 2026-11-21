@@ -19,7 +19,6 @@ func registerHouseNumberRoutes(mux *http.ServeMux, houseNumbers *store.HouseNumb
 	mux.HandleFunc("DELETE /api/house-numbers/{id}", handleDeleteHouseNumber(houseNumbers))
 }
 
-//nolint:dupl // mirrors handleCreateStreet; distinct entity types make a shared generic handler less readable than the duplication
 func handleCreateHouseNumber(houseNumbers *store.HouseNumberStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var h store.HouseNumber
@@ -36,6 +35,11 @@ func handleCreateHouseNumber(houseNumbers *store.HouseNumberStore) http.HandlerF
 		created, err := houseNumbers.Create(r.Context(), h)
 		if errors.Is(err, store.ErrStreetNotFound) {
 			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if errors.Is(err, store.ErrHouseNumberAlreadyExists) {
+			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
 
@@ -139,6 +143,11 @@ func handleUpdateHouseNumber(houseNumbers *store.HouseNumberStore) http.HandlerF
 			return
 		}
 
+		if errors.Is(err, store.ErrHouseNumberAlreadyExists) || errors.Is(err, store.ErrOwnedByCollector) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "house number not found")
 			return
@@ -165,6 +174,11 @@ func handleDeleteHouseNumber(houseNumbers *store.HouseNumberStore) http.HandlerF
 		err = houseNumbers.Delete(r.Context(), id)
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "house number not found")
+			return
+		}
+
+		if errors.Is(err, store.ErrOwnedByCollector) {
+			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
 

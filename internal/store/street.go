@@ -17,6 +17,12 @@ type Street struct {
 	Country   string    `json:"country" gorm:"not null;uniqueIndex:streets_name_district_city_country_key,priority:4"`
 	Latitude  float64   `json:"latitude" gorm:"type:double precision;not null"`
 	Longitude float64   `json:"longitude" gorm:"type:double precision;not null"`
+	// CollectorID, when set, names the collector that owns the street; only
+	// that collector's runs may change it.
+	CollectorID *string `json:"collectorId,omitempty" gorm:"index"`
+	// ExternalID, when set, is the street's stable ID in its collector's
+	// source. Only collectors set it.
+	ExternalID *string `json:"externalId,omitempty"`
 
 	// HouseNumbers is never loaded; it only declares the foreign key from
 	// house_numbers so deleting a street cascades to its house numbers.
@@ -47,6 +53,10 @@ func (s Street) Validate() error {
 // district, city and country is already stored.
 var ErrStreetAlreadyExists = errors.New("a street with this name, district, city and country already exists")
 
+// streetsExternalIDKey is the unique index on Street.ExternalID, created by
+// Migrate.
+const streetsExternalIDKey = "streets_external_id_key"
+
 // StreetStore reads and writes streets.
 type StreetStore struct {
 	db *gorm.DB
@@ -57,8 +67,10 @@ func NewStreetStore(db *gorm.DB) *StreetStore {
 	return &StreetStore{db: db}
 }
 
-// Create inserts s and returns it with its generated ID.
+// Create inserts s as a manual street and returns it with its generated ID.
 func (st *StreetStore) Create(ctx context.Context, s Street) (Street, error) {
+	s.CollectorID, s.ExternalID = nil, nil
+
 	err := st.db.WithContext(ctx).Create(&s).Error
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return Street{}, ErrStreetAlreadyExists
@@ -155,20 +167,39 @@ func (st *StreetStore) Get(ctx context.Context, id uuid.UUID) (Street, error) {
 	return s, notFound(err)
 }
 
-// Update replaces the street with the given ID, returning ErrNotFound if it
-// does not exist or ErrStreetAlreadyExists on a uniqueness conflict.
+// Update replaces the street with the given ID, except for its collector and
+// external ID. It returns ErrNotFound if it does not exist, an error matching
+// ErrOwnedByCollector if a collector owns it, or ErrStreetAlreadyExists on a
+// uniqueness conflict.
 func (st *StreetStore) Update(ctx context.Context, id uuid.UUID, s Street) (Street, error) {
 	s.ID = id
 
-	if err := updateRow(ctx, st.db, &s, gorm.ErrDuplicatedKey, ErrStreetAlreadyExists); err != nil {
+	err := updateRow(ctx, st.db, &s, collectorManagedColumns, gorm.ErrDuplicatedKey, ErrStreetAlreadyExists)
+	if errors.Is(err, ErrNotFound) {
+		err = refusal(st.db.WithContext(ctx), "street", nil, "streets", "id = ?", id)
+	}
+
+	if err != nil {
 		return Street{}, err
 	}
 
 	return s, nil
 }
 
+// streetDependants are the rows deleting a street cascades to.
+var streetDependants = []dependants{{"house_numbers", "street_id"}, {"geo_objects", "street_id"}}
+
 // Delete removes the street with the given ID and, via cascade, its house
-// numbers. It returns ErrNotFound if no such street exists.
+// numbers and geo objects. It returns ErrNotFound if no such street exists,
+// and an error matching ErrOwnedByCollector if a collector owns it or any of
+// those rows.
 func (st *StreetStore) Delete(ctx context.Context, id uuid.UUID) error {
-	return requireOneRow(st.db.WithContext(ctx).Delete(&Street{}, "id = ?", id))
+	db := st.db.WithContext(ctx)
+
+	err := requireOneRow(db.Where(manualRow).Where(streetWithoutOwnedRows).Delete(&Street{}, "id = ?", id))
+	if errors.Is(err, ErrNotFound) {
+		return refusal(db, "street", streetDependants, "streets", "id = ?", id)
+	}
+
+	return err
 }

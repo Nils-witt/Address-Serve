@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nils-witt/address-serve/docs/collectors/collect.schema.json",
+  "title": "Collector collect output (contract v1)",
+  "description": "Only contractVersion and the overall shape are required for the run to succeed; entries that break their rules are skipped individually.",
+  "type": "object",
+  "required": ["contractVersion"],
+  "properties": {
+    "contractVersion": { "const": 1 },
+    "addresses": { "type": "array", "items": { "$ref": "#/$defs/address" } },
+    "geoObjects": { "type": "array", "items": { "$ref": "#/$defs/geoObject" } }
+  },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "externalId": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "address": {
+      "type": "object",
+      "required": ["street", "district", "city", "country", "number", "postcode", "latitude", "longitude"],
+      "properties": {
+        "streetExternalId": { "$ref": "#/$defs/externalId" },
+        "houseNumberExternalId": { "$ref": "#/$defs/externalId" },
+        "street": { "$ref": "#/$defs/nonEmpty" },
+        "district": { "$ref": "#/$defs/nonEmpty" },
+        "city": { "$ref": "#/$defs/nonEmpty" },
+        "country": { "$ref": "#/$defs/nonEmpty" },
+        "number": { "type": "integer", "minimum": 1 },
+        "numberAddition": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/nonEmpty" }] },
+        "postcode": { "$ref": "#/$defs/nonEmpty" },
+        "latitude": { "$ref": "#/$defs/latitude" },
+        "longitude": { "$ref": "#/$defs/longitude" }
+      }
+    },
+    "addressRef": {
+      "type": "object",
+      "required": ["street", "district", "city", "country"],
+      "properties": {
+        "streetExternalId": { "$ref": "#/$defs/externalId" },
+        "houseNumberExternalId": { "$ref": "#/$defs/externalId" },
+        "street": { "$ref": "#/$defs/nonEmpty" },
+        "district": { "$ref": "#/$defs/nonEmpty" },
+        "city": { "$ref": "#/$defs/nonEmpty" },
+        "country": { "$ref": "#/$defs/nonEmpty" },
+        "number": { "type": "integer", "minimum": 1 },
+        "numberAddition": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/nonEmpty" }] }
+      },
+      "dependentRequired": { "numberAddition": ["number"] }
+    },
+    "geoObject": {
+      "type": "object",
+      "required": ["group", "name", "latitude", "longitude"],
+      "properties": {
+        "externalId": { "$ref": "#/$defs/externalId" },
+        "group": { "$ref": "#/$defs/nonEmpty" },
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "latitude": { "$ref": "#/$defs/latitude" },
+        "longitude": { "$ref": "#/$defs/longitude" },
+        "address": { "$ref": "#/$defs/addressRef" }
+      }
+    }
+  }
+}

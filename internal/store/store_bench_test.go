@@ -60,7 +60,18 @@ func seedBenchDB(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err := db.Exec("DROP TABLE IF EXISTS geo_objects, house_numbers, streets CASCADE").Error; err != nil {
+	// Tests of other packages migrate the same database concurrently; holding
+	// Migrate's lock keeps the drop from landing in the middle of theirs.
+	err = db.Connection(func(conn *gorm.DB) error {
+		if err := conn.Exec("SELECT pg_advisory_lock(?)", migrateLockKey).Error; err != nil {
+			return err
+		}
+
+		defer conn.Exec("SELECT pg_advisory_unlock(?)", migrateLockKey)
+
+		return conn.Exec("DROP TABLE IF EXISTS collector_runs, geo_objects, house_numbers, streets, collectors CASCADE").Error
+	})
+	if err != nil {
 		return nil, err
 	}
 
