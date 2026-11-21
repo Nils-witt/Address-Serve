@@ -28,6 +28,9 @@ type GeoObject struct {
 	// ExternalID, when set, identifies the object in another system that
 	// keeps it in sync, such as a tileserve-go instance. It is unique.
 	ExternalID *string `json:"externalId,omitempty" gorm:"column:external_id"`
+	// CollectorID, when set, names the collector that owns the geo object;
+	// only that collector's runs may change it.
+	CollectorID *string `json:"collectorId,omitempty" gorm:"index"`
 }
 
 // maxExternalIDLength bounds GeoObject.ExternalID.
@@ -126,6 +129,8 @@ func NewGeoObjectStore(db *gorm.DB) *GeoObjectStore {
 // the references are invalid, and ErrNameTaken or ErrExternalIDTaken if
 // another geo object already has g's name in its group or g's external ID.
 func (st *GeoObjectStore) Create(ctx context.Context, g GeoObject) (GeoObject, error) {
+	g.CollectorID = nil
+
 	err := st.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := checkHouseNumberOnStreet(tx, g); err != nil {
 			return err
@@ -213,7 +218,7 @@ func (st *GeoObjectStore) Update(ctx context.Context, id uuid.UUID, g GeoObject)
 			return err
 		}
 
-		omitted := []string{"id"}
+		omitted := []string{"id", "collector_id"}
 		if g.ExternalID == nil {
 			omitted = append(omitted, "external_id")
 		}
@@ -256,6 +261,7 @@ func (st *GeoObjectStore) UpsertByExternalID(
 	g GeoObject,
 ) (GeoObject, bool, error) {
 	g.ExternalID = &externalID
+	g.CollectorID = nil
 
 	var created bool
 
@@ -277,7 +283,7 @@ func (st *GeoObjectStore) UpsertByExternalID(
 			err = tx.Create(&g).Error
 		case err == nil:
 			g.ID = existing.ID
-			err = tx.Model(&g).Select("*").Omit("id").Updates(&g).Error
+			err = tx.Model(&g).Clauses(clause.Returning{}).Select("*").Omit("id", "collector_id").Updates(&g).Error
 		}
 
 		return geoObjectWriteError(err)

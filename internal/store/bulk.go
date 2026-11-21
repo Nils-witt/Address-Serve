@@ -56,10 +56,30 @@ func (s BulkStreetInput) Validate() error {
 		return err
 	}
 
+	type numberKey struct {
+		number   int
+		addition string
+	}
+
+	seen := make(map[numberKey]struct{}, len(s.HouseNumbers))
+
 	for i, h := range s.HouseNumbers {
 		if err := h.Validate(); err != nil {
 			return fmt.Errorf("houseNumbers[%d]: %w", i, err)
 		}
+
+		// The streets of a batch are all new, so a repeated number within a
+		// street is the only way to violate the house-number key.
+		key := numberKey{number: h.Number}
+		if h.NumberAddition != nil {
+			key.addition = *h.NumberAddition
+		}
+
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("houseNumbers[%d]: %w", i, ErrHouseNumberAlreadyExists)
+		}
+
+		seen[key] = struct{}{}
 	}
 
 	return nil
@@ -120,7 +140,7 @@ func (bs *BulkStore) Create(ctx context.Context, inputs []BulkStreetInput) ([]Bu
 		}
 
 		if err := tx.CreateInBatches(&houseNumbers, insertBatchSize).Error; err != nil {
-			return fmt.Errorf("houseNumbers: %w", err)
+			return fmt.Errorf("houseNumbers: %w", houseNumberWriteError(err))
 		}
 
 		return nil

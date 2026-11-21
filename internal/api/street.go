@@ -18,7 +18,6 @@ func registerStreetRoutes(mux *http.ServeMux, streets *store.StreetStore) {
 	mux.HandleFunc("DELETE /api/streets/{id}", handleDeleteStreet(streets))
 }
 
-//nolint:dupl // mirrors handleCreateHouseNumber; distinct entity types make a shared generic handler less readable than the duplication
 func handleCreateStreet(streets *store.StreetStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var s store.Street

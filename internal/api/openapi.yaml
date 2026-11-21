@@ -349,7 +349,8 @@ paths:
         Creates one or more streets together with their house numbers in a single
         request. The whole batch is applied atomically: if any street or house
         number fails to create (e.g. a duplicate street, or a validation error),
-        nothing in the request is persisted.
+        nothing in the request is persisted. A street's house numbers must be
+        unique by number and addition.
       operationId: bulkCreate
       tags: [bulk]
       requestBody:
@@ -493,6 +494,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: The street already has a house number with this number and addition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/house-numbers/{id}:
     parameters:
@@ -565,6 +572,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: House number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The street already has a house number with this number and addition
           content:
             application/json:
               schema:
@@ -1212,6 +1225,18 @@ components:
               type: string
               format: uuid
               example: db94a625-aa11-4c37-b9ff-9706e792e7dd
+            collectorId:
+              type: string
+              readOnly: true
+              description: >-
+                The collector that owns this row, if any. Rows owned by a
+                collector are changed only by its runs.
+              example: bonn
+            externalId:
+              type: string
+              readOnly: true
+              description: The row's stable ID in its collector's source, if any. Only collectors set it.
+              example: bonn-0815
         - $ref: "#/components/schemas/StreetInput"
 
     HouseNumberInput:
@@ -1257,6 +1282,18 @@ components:
               type: string
               format: uuid
               example: 094d22c5-9ec0-4917-b2b2-b82a5a89523d
+            collectorId:
+              type: string
+              readOnly: true
+              description: >-
+                The collector that owns this row, if any. Rows owned by a
+                collector are changed only by its runs.
+              example: bonn
+            externalId:
+              type: string
+              readOnly: true
+              description: The row's stable ID in its collector's source, if any. Only collectors set it.
+              example: bonn-0815
         - $ref: "#/components/schemas/HouseNumberInput"
 
     NearbyHouseNumber:
@@ -1400,6 +1437,13 @@ components:
               type: string
               format: uuid
               example: 5b0f3c1e-8f2a-4a8e-9a43-2f1d6c7b9e10
+            collectorId:
+              type: string
+              readOnly: true
+              description: >-
+                The collector that owns this row, if any. Rows owned by a
+                collector are changed only by its runs.
+              example: bonn
         - $ref: "#/components/schemas/GeoObjectInput"
 
     GeoObjectRefs:

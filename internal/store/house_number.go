@@ -17,6 +17,12 @@ type HouseNumber struct {
 	Postcode       string    `json:"postcode" gorm:"not null"`
 	Latitude       float64   `json:"latitude" gorm:"type:double precision;not null"`
 	Longitude      float64   `json:"longitude" gorm:"type:double precision;not null"`
+	// CollectorID, when set, names the collector that owns the house number;
+	// only that collector's runs may change it.
+	CollectorID *string `json:"collectorId,omitempty" gorm:"index"`
+	// ExternalID, when set, is the house number's stable ID in its
+	// collector's source. Only collectors set it.
+	ExternalID *string `json:"externalId,omitempty"`
 
 	// GeoObjects is never loaded; it declares the foreign key from
 	// geo_objects so deleting a house number detaches its geo objects, which
@@ -49,9 +55,34 @@ func (h HouseNumber) Validate() error {
 	return nil
 }
 
-// ErrStreetNotFound is returned when a house number references a street that
-// does not exist.
-var ErrStreetNotFound = errors.New("referenced street does not exist")
+var (
+	// ErrStreetNotFound is returned when a house number references a street
+	// that does not exist.
+	ErrStreetNotFound = errors.New("referenced street does not exist")
+
+	// ErrHouseNumberAlreadyExists is returned when the street already has a
+	// house number with the same number and addition.
+	ErrHouseNumberAlreadyExists = errors.New("the street already has a house number with this number and addition")
+)
+
+// Names of the unique indexes on house_numbers, created by Migrate.
+const (
+	houseNumbersStreetNumberKey = "house_numbers_street_number_key"
+	houseNumbersExternalIDKey   = "house_numbers_external_id_key"
+)
+
+// houseNumberWriteError maps a constraint violation from writing a house
+// number to the matching domain error and returns other errors unchanged.
+func houseNumberWriteError(err error) error {
+	switch {
+	case errors.Is(err, gorm.ErrForeignKeyViolated):
+		return ErrStreetNotFound
+	case errors.Is(err, gorm.ErrDuplicatedKey):
+		return ErrHouseNumberAlreadyExists
+	}
+
+	return err
+}
 
 // HouseNumberStore reads and writes house numbers.
 type HouseNumberStore struct {
@@ -63,14 +94,17 @@ func NewHouseNumberStore(db *gorm.DB) *HouseNumberStore {
 	return &HouseNumberStore{db: db}
 }
 
-// Create inserts h and returns it with its generated ID.
+// Create inserts h as a manual house number and returns it with its
+// generated ID. It returns ErrStreetNotFound if StreetID is unknown and
+// ErrHouseNumberAlreadyExists if the street already has h's number.
 func (st *HouseNumberStore) Create(ctx context.Context, h HouseNumber) (HouseNumber, error) {
-	err := st.db.WithContext(ctx).Create(&h).Error
-	if errors.Is(err, gorm.ErrForeignKeyViolated) {
-		return HouseNumber{}, ErrStreetNotFound
+	h.CollectorID, h.ExternalID = nil, nil
+
+	if err := houseNumberWriteError(st.db.WithContext(ctx).Create(&h).Error); err != nil {
+		return HouseNumber{}, err
 	}
 
-	return h, err
+	return h, nil
 }
 
 // HouseNumberFilter narrows List results. Nil and empty fields are ignored.
@@ -145,13 +179,15 @@ func (st *HouseNumberStore) Get(ctx context.Context, id uuid.UUID) (HouseNumber,
 	return h, notFound(err)
 }
 
-// Update replaces the house number with the given ID, returning ErrNotFound
-// if it does not exist or ErrStreetNotFound if StreetID is unknown.
+// Update replaces the house number with the given ID, except for its
+// collector and external ID. It returns ErrNotFound if it does not exist,
+// and the same errors as Create.
 func (st *HouseNumberStore) Update(ctx context.Context, id uuid.UUID, h HouseNumber) (HouseNumber, error) {
 	h.ID = id
 
-	if err := updateRow(ctx, st.db, &h, gorm.ErrForeignKeyViolated, ErrStreetNotFound); err != nil {
-		return HouseNumber{}, err
+	err := updateRow(ctx, st.db, &h, collectorManagedColumns, gorm.ErrForeignKeyViolated, ErrStreetNotFound)
+	if err != nil {
+		return HouseNumber{}, houseNumberWriteError(err)
 	}
 
 	return h, nil

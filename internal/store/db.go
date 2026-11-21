@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -78,10 +79,12 @@ func notFound(err error) error {
 }
 
 // updateRow replaces every column of row except its primary key, which must
-// already be set. A constraint violation matching conflict is mapped to
-// conflictErr and a zero row count to ErrNotFound.
-func updateRow(ctx context.Context, db *gorm.DB, row any, conflict, conflictErr error) error {
-	res := db.WithContext(ctx).Model(row).Select("*").Omit("id").Updates(row)
+// already be set, and the columns in keep, and fills row with the stored
+// result. A constraint violation matching conflict is mapped to conflictErr
+// and a zero row count to ErrNotFound.
+func updateRow(ctx context.Context, db *gorm.DB, row any, keep []string, conflict, conflictErr error) error {
+	res := db.WithContext(ctx).Model(row).Clauses(clause.Returning{}).
+		Select("*").Omit(append([]string{"id"}, keep...)...).Updates(row)
 	if errors.Is(res.Error, conflict) {
 		return conflictErr
 	}
@@ -92,6 +95,10 @@ func updateRow(ctx context.Context, db *gorm.DB, row any, conflict, conflictErr 
 
 	return requireOneRow(res)
 }
+
+// collectorManagedColumns are set only by collector runs: API writes neither
+// set nor overwrite them.
+var collectorManagedColumns = []string{"collector_id", "external_id"}
 
 // requireOneRow returns ErrNotFound if res affected no rows.
 func requireOneRow(res *gorm.DB) error {

@@ -30,7 +30,7 @@ func registerBulkRoutes(mux *http.ServeMux, bulk *store.BulkStore) {
 		}
 
 		results, err := bulk.Create(r.Context(), inputs)
-		if errors.Is(err, store.ErrStreetAlreadyExists) {
+		if errors.Is(err, store.ErrStreetAlreadyExists) || errors.Is(err, store.ErrHouseNumberAlreadyExists) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
