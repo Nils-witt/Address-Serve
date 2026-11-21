@@ -1,6 +1,6 @@
 # Plan: Collectors (pluggable address sources)
 
-Status: **draft for review**. Nothing is implemented yet.
+Status: **implemented** on branch `feature/collector-plugins` (see §11 for deviations).
 
 A *collector* is an executable in a collectors folder. The app runs it on
 demand. It returns a list of addresses (and geo objects), and the app
@@ -490,3 +490,34 @@ Following CLAUDE.md: table-driven, `t.Parallel()`, standard `testing` only.
 ## 10. Open questions
 
 None. All questions (Q1–Q23) are answered and recorded as D31–D49.
+
+---
+
+## 11. Implementation notes
+
+Where the implementation departs from, or adds to, the plan above:
+
+- **Contract package.** The contract types live in the leaf package
+  `internal/collector/contract`, because both `store` (the sync) and the
+  runner (`internal/collector`, which imports `store`) need them.
+- **Conflicting entries keep their row.** An output entry that matches one of
+  the collector's own rows but can't be applied (a rename onto a taken name, a
+  different external ID) is a conflict, and the row stays unchanged instead
+  of being deleted as stale. For a street, that includes its house numbers.
+  This is documented in the contract.
+- **Released rows lose their external ID.** Only collectors' rows carry one, so
+  a released row can be adopted again later.
+- **Renames within one run.** Swapping two names, or chaining renames, in a
+  single run reports conflicts. Every rename is checked against the names as
+  they are when it is applied.
+- **Settings in the API.** A collector's `settings` holds the values that are
+  set, except secrets; `secretsSet` lists the secrets that have a value.
+- **Migration lock.** `Migrate` holds a Postgres advisory lock, and its index
+  checks look only in the current schema. Concurrent migrations (several
+  instances, or parallel tests) raced to create the same extension or index.
+- **UI access.** The Collectors tab is hidden when `GET /api/collectors`
+  answers 403 (no admin claim) or 404 (collectors are unsupported on the
+  server's OS).
+- **Test helper.** `internal/store/storetest.OpenIsolated` gives tests a
+  migrated database in a schema of their own. Tests that reload collectors
+  need it, because a reload marks every collector it doesn't find as missing.
