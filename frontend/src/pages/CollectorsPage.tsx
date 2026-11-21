@@ -5,6 +5,7 @@ import type { Collector, CollectorRun, CollectorSettingsInput } from '../api/typ
 import ErrorBanner from '../components/ErrorBanner';
 import CollectorDeleteDialog from '../features/collectors/CollectorDeleteDialog';
 import CollectorRunsDialog from '../features/collectors/CollectorRunsDialog';
+import CollectorScheduleDialog from '../features/collectors/CollectorScheduleDialog';
 import CollectorSettingsDialog from '../features/collectors/CollectorSettingsDialog';
 import { useApi } from '../hooks/useApi';
 import { useCollectorEvents } from '../hooks/useCollectorEvents';
@@ -16,6 +17,7 @@ import CollectorsTable from './collectors-page/CollectorsTable';
 
 type Open =
   | { dialog: 'settings'; collector: Collector }
+  | { dialog: 'schedule'; collector: Collector }
   | { dialog: 'history'; collector: Collector; runId?: string }
   | { dialog: 'delete'; collector: Collector };
 
@@ -100,6 +102,12 @@ export default function CollectorsPage() {
     close();
   };
 
+  const onSaveSchedule = async (id: string, schedule: string) => {
+    await api.updateCollectorSchedule(id, schedule);
+    await invalidate('collectors');
+    close();
+  };
+
   const onDelete = async (id: string, deleteData: boolean) => {
     await api.deleteCollector(id, deleteData);
     await invalidate('collectors');
@@ -122,6 +130,7 @@ export default function CollectorsPage() {
         onRun={onRun}
         onCancel={onCancel}
         onSettings={(c) => show({ dialog: 'settings', collector: c })}
+        onSchedule={(c) => show({ dialog: 'schedule', collector: c })}
         onHistory={(c) => show({ dialog: 'history', collector: c })}
         onDelete={(c) => show({ dialog: 'delete', collector: c })}
       />
@@ -130,6 +139,12 @@ export default function CollectorsPage() {
         collector={open?.dialog === 'settings' ? open.collector : null}
         onClose={close}
         onSave={onSaveSettings}
+      />
+      <CollectorScheduleDialog
+        key={`schedule-${dialogKey}`}
+        collector={open?.dialog === 'schedule' ? open.collector : null}
+        onClose={close}
+        onSave={onSaveSchedule}
       />
       <CollectorRunsDialog
         key={`history-${dialogKey}`}

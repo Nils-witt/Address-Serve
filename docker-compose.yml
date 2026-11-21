@@ -36,6 +36,8 @@ services:
       COLLECTOR_TIMEOUT: ${COLLECTOR_TIMEOUT:-10m}
       COLLECTOR_GEO_MAX_DISTANCE_M: ${COLLECTOR_GEO_MAX_DISTANCE_M:-100}
       COLLECTOR_RUN_HISTORY: ${COLLECTOR_RUN_HISTORY:-50}
+      # Time zone of collector schedules without a CRON_TZ= prefix.
+      TZ: ${TZ:-}
     volumes:
       # The image has no shell or interpreters: collectors must be static
       # binaries.

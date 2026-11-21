@@ -56,6 +56,9 @@ type Config struct {
 	// LogFlushInterval is how often a running run's log is saved. Zero
 	// means logFlushInterval.
 	LogFlushInterval time.Duration
+	// ScheduleCheckInterval is how often RunSchedules looks for due runs.
+	// Zero means scheduleCheckInterval.
+	ScheduleCheckInterval time.Duration
 }
 
 // Runner discovers collectors and runs them in the background, one run per

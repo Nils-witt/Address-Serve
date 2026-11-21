@@ -148,6 +148,10 @@ export interface Collector {
   settings: Record<string, SettingValue>;
   /** Keys of the secrets that have a value. */
   secretsSet: string[];
+  /** The cron expression that starts runs; empty for none. */
+  schedule: string;
+  /** When the schedule next starts a run; absent without a schedule. */
+  nextRunAt?: string;
   discoveredAt: string;
   updatedAt: string;
   lastRun?: CollectorRun;
@@ -156,6 +160,9 @@ export interface Collector {
 /** PUT /api/collectors/{id}/settings: absent settings are unset, except
  * secrets, which are kept; null unsets a secret. */
 export type CollectorSettingsInput = Record<string, SettingValue | null>;
+
+/** CollectorRun.triggeredBy of runs that a schedule started. */
+export const TRIGGERED_BY_SCHEDULE = 'schedule';
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 

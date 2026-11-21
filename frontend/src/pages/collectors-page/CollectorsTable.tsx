@@ -16,6 +16,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import HistoryIcon from '@mui/icons-material/History';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StopIcon from '@mui/icons-material/Stop';
 import { useTranslation } from 'react-i18next';
@@ -50,6 +51,30 @@ function LastRun({ collector }: { collector: Collector }) {
   );
 }
 
+function Schedule({ collector }: { collector: Collector }) {
+  const { t, i18n } = useTranslation();
+  if (!collector.schedule) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {t('collectors.scheduleNone')}
+      </Typography>
+    );
+  }
+
+  return (
+    <div>
+      <Typography variant="body2" className="collectors-table__schedule">
+        {collector.schedule}
+      </Typography>
+      {collector.nextRunAt && collector.status === 'ok' && (
+        <Typography variant="caption" color="text.secondary" component="div">
+          {t('collectors.nextRun', { date: formatDateTime(collector.nextRunAt, i18n.language) })}
+        </Typography>
+      )}
+    </div>
+  );
+}
+
 export default function CollectorsTable({
   collectors,
   loading,
@@ -58,6 +83,7 @@ export default function CollectorsTable({
   onRun,
   onCancel,
   onSettings,
+  onSchedule,
   onHistory,
   onDelete,
 }: {
@@ -68,6 +94,7 @@ export default function CollectorsTable({
   onRun: (c: Collector) => void;
   onCancel: (c: Collector) => void;
   onSettings: (c: Collector) => void;
+  onSchedule: (c: Collector) => void;
   onHistory: (c: Collector) => void;
   onDelete: (c: Collector) => void;
 }) {
@@ -100,6 +127,7 @@ export default function CollectorsTable({
               <TableCell>{t('collectors.collector')}</TableCell>
               <TableCell>{t('collectors.status')}</TableCell>
               <TableCell>{t('collectors.version')}</TableCell>
+              <TableCell>{t('collectors.schedule')}</TableCell>
               <TableCell>{t('collectors.lastRun')}</TableCell>
               <TableCell align="right">{t('common.actions')}</TableCell>
             </TableRow>
@@ -127,6 +155,9 @@ export default function CollectorsTable({
                     </Tooltip>
                   </TableCell>
                   <TableCell>{c.version}</TableCell>
+                  <TableCell>
+                    <Schedule collector={c} />
+                  </TableCell>
                   <TableCell>
                     <LastRun collector={c} />
                   </TableCell>
@@ -161,6 +192,11 @@ export default function CollectorsTable({
                           <SettingsIcon fontSize="small" />
                         </IconButton>
                       </span>
+                    </Tooltip>
+                    <Tooltip title={t('collectors.schedule')}>
+                      <IconButton size="small" onClick={() => onSchedule(c)}>
+                        <ScheduleIcon fontSize="small" />
+                      </IconButton>
                     </Tooltip>
                     <Tooltip title={t('collectors.history')}>
                       <IconButton size="small" onClick={() => onHistory(c)}>

@@ -37,6 +37,7 @@ func registerCollectorRoutes(mux *http.ServeMux, cfg CollectorConfig) {
 		"POST /api/collectors/reload":             handleReloadCollectors(cfg),
 		"GET /api/collectors/{id}":                handleGetCollector(cfg.Store),
 		"PUT /api/collectors/{id}/settings":       handleUpdateCollectorSettings(cfg.Store),
+		"PUT /api/collectors/{id}/schedule":       handleUpdateCollectorSchedule(cfg.Store),
 		"DELETE /api/collectors/{id}":             handleDeleteCollector(cfg.Store),
 		"POST /api/collectors/{id}/runs":          handleStartRun(cfg.Runner),
 		"GET /api/collectors/{id}/runs":           handleListRuns(cfg.Store),
@@ -58,11 +59,17 @@ type collectorView struct {
 	Settings   map[string]json.RawMessage `json:"settings"`
 	SecretsSet []string                   `json:"secretsSet"`
 	LastRun    *store.CollectorRun        `json:"lastRun,omitempty"`
+	// NextRunAt is when the schedule next starts a run.
+	NextRunAt *time.Time `json:"nextRunAt,omitempty"`
 }
 
 func newCollectorView(c store.Collector, lastRun *store.CollectorRun) collectorView {
 	v := collectorView{
 		Collector: c, Settings: map[string]json.RawMessage{}, SecretsSet: []string{}, LastRun: lastRun,
+	}
+
+	if next, ok := c.NextScheduledRun(); ok {
+		v.NextRunAt = &next
 	}
 
 	for _, spec := range c.SettingsSchema {
@@ -170,6 +177,29 @@ func handleUpdateCollectorSettings(cs *store.CollectorStore) http.HandlerFunc {
 
 		c, err := cs.UpdateSettings(r.Context(), r.PathValue("id"), input)
 		if errors.Is(err, store.ErrInvalidSettings) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		writeCollector(w, r, cs, c, err)
+	}
+}
+
+// scheduleInput is the body of PUT /api/collectors/{id}/schedule.
+type scheduleInput struct {
+	Schedule *string `json:"schedule"`
+}
+
+func handleUpdateCollectorSchedule(cs *store.CollectorStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input scheduleInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Schedule == nil {
+			writeError(w, http.StatusBadRequest, `body must be {"schedule": "<cron expression>"}, empty to remove it`)
+			return
+		}
+
+		c, err := cs.UpdateSchedule(r.Context(), r.PathValue("id"), *input.Schedule)
+		if errors.Is(err, store.ErrInvalidSchedule) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}

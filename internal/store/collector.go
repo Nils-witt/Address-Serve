@@ -48,9 +48,15 @@ type Collector struct {
 	SettingsSchema []contract.SettingSpec `json:"settingsSchema" gorm:"type:jsonb;serializer:json;not null;default:'[]'"`
 	// Settings holds the configured values by setting key, secrets included,
 	// so it is never serialized as is; the API renders it with secrets masked.
-	Settings     map[string]json.RawMessage `json:"-" gorm:"type:jsonb;serializer:json;not null;default:'{}'"`
-	DiscoveredAt time.Time                  `json:"discoveredAt" gorm:"not null"`
-	UpdatedAt    time.Time                  `json:"updatedAt" gorm:"not null"`
+	Settings map[string]json.RawMessage `json:"-" gorm:"type:jsonb;serializer:json;not null;default:'{}'"`
+	// Schedule is the cron expression that starts runs, empty for none; see
+	// ParseSchedule.
+	Schedule string `json:"schedule" gorm:"not null;default:''"`
+	// ScheduledUntil is when the schedule was last set or last started a run:
+	// the next run is due at the schedule's first time after it.
+	ScheduledUntil *time.Time `json:"-"`
+	DiscoveredAt   time.Time  `json:"discoveredAt" gorm:"not null"`
+	UpdatedAt      time.Time  `json:"updatedAt" gorm:"not null"`
 
 	// The fields below are never loaded; they declare the foreign keys from
 	// the rows a collector owns. Deleting a collector turns its rows into

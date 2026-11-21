@@ -230,6 +230,15 @@
     "empty": "No collectors found. Put executables into the collectors folder and rescan it.",
     "deleteTitle": "Delete {{name}}?",
     "deleteMessage": "Its settings and runs are deleted. The streets, house numbers and geo objects it owns become manual ones that can be edited here, unless you delete them too.",
-    "deleteData": "Also delete the rows it owns (rows others depend on become manual instead)"
+    "deleteData": "Also delete the rows it owns (rows others depend on become manual instead)",
+    "schedule": "Schedule",
+    "scheduleTitle": "Schedule of {{name}}",
+    "scheduleLabel": "Cron expression",
+    "scheduleHelp": "Minute, hour, day of month, month and day of week, such as \"0 3 * * *\" for every night at 03:00, or \"@daily\", \"@hourly\", \"@every 6h\". Prefix CRON_TZ=Europe/Berlin to set the time zone; without it, the server's time zone applies. Leave empty for manual runs only.",
+    "scheduleExamples": "Examples",
+    "scheduleNone": "Manual only",
+    "scheduleRemove": "Remove schedule",
+    "nextRun": "next {{date}}",
+    "scheduleTrigger": "Schedule"
   }
 }

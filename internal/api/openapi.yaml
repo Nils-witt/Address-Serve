@@ -1339,6 +1339,63 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/collectors/{id}/schedule:
+    parameters:
+      - $ref: "#/components/parameters/CollectorID"
+    put:
+      summary: Set or remove a collector's schedule
+      description: >-
+        Sets the cron expression that starts runs of the collector, or removes
+        it when empty. It takes the five standard fields (minute, hour, day of
+        month, month, day of week), descriptors such as `@daily`, `@hourly` and
+        `@every 6h` (at least `@every 1m`), and an optional
+        `CRON_TZ=<IANA zone>` prefix; without one, times are in the server's
+        time zone (`TZ`). Runs are due from the time the schedule is set. A due
+        run starts within about 15 seconds, on one instance only; if no
+        instance was up at the time, it starts once when one is. A due run is
+        skipped, not retried, while the collector is still running, is missing
+        or invalid, or lacks required settings. Scheduled runs have
+        `triggeredBy` set to `schedule`.
+      operationId: updateCollectorSchedule
+      tags: [collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schedule]
+              properties:
+                schedule:
+                  type: string
+                  description: A cron expression, or empty to remove the schedule
+            examples:
+              nightly:
+                summary: Every night at 03:00 Berlin time
+                value: { schedule: "CRON_TZ=Europe/Berlin 0 3 * * *" }
+              remove:
+                summary: Remove the schedule
+                value: { schedule: "" }
+      responses:
+        "200":
+          description: The collector with its new schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collector"
+        "400":
+          description: The body has no schedule, or the schedule doesn't parse
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/collectors/{id}/runs:
     parameters:
       - $ref: "#/components/parameters/CollectorID"
@@ -2058,7 +2115,7 @@ components:
 
     Collector:
       type: object
-      required: [id, path, status, name, version, settingsSchema, settings, secretsSet, discoveredAt, updatedAt]
+      required: [id, path, status, name, version, settingsSchema, settings, secretsSet, schedule, discoveredAt, updatedAt]
       properties:
         id:
           type: string
@@ -2093,6 +2150,16 @@ components:
           items:
             type: string
           description: The keys of the secret settings that have a value
+        schedule:
+          type: string
+          description: The cron expression that starts runs, empty for none; see PUT /api/collectors/{id}/schedule
+          example: CRON_TZ=Europe/Berlin 0 3 * * *
+        nextRunAt:
+          type: string
+          format: date-time
+          description: >-
+            When the schedule next starts a run; absent without a schedule. It
+            may lie a few seconds in the past while a due run is being started.
         discoveredAt:
           type: string
           format: date-time
@@ -2175,6 +2242,7 @@ components:
           description: Set while the run is running
         triggeredBy:
           type: string
+          description: The name of who started the run, or `schedule` for a run its schedule started
           example: Ada Lovelace
         startedAt:
           type: string

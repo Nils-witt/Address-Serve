@@ -11,8 +11,15 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import type { Collector, CollectorRun, EntityStats, SyncStats } from '../../api/types';
+import {
+  type Collector,
+  type CollectorRun,
+  type EntityStats,
+  type SyncStats,
+  TRIGGERED_BY_SCHEDULE,
+} from '../../api/types';
 import ErrorBanner from '../../components/ErrorBanner';
 import Modal from '../../components/Modal';
 import { useCollectorRun, useCollectorRuns } from '../../hooks/useCollectors';
@@ -105,6 +112,13 @@ function RunLog({ run }: { run: CollectorRun }) {
   );
 }
 
+/** Who started the run, with runs of the schedule named as such. */
+function triggeredBy(run: CollectorRun, t: TFunction): string {
+  return run.triggeredBy === TRIGGERED_BY_SCHEDULE
+    ? t('collectors.scheduleTrigger')
+    : run.triggeredBy;
+}
+
 function RunDetail({ runId, onCancel }: { runId: string; onCancel: (run: CollectorRun) => void }) {
   const { t, i18n } = useTranslation();
   const { data: run, error } = useCollectorRun(runId);
@@ -117,7 +131,7 @@ function RunDetail({ runId, onCancel }: { runId: string; onCancel: (run: Collect
       <Stack direction="row" spacing={2} className="collector-runs-dialog__summary">
         <RunStatus run={run} />
         <Typography variant="body2" color="text.secondary">
-          {t('collectors.startedBy', { date: date(run.startedAt), name: run.triggeredBy })}
+          {t('collectors.startedBy', { date: date(run.startedAt), name: triggeredBy(run, t) })}
           {run.finishedAt && ` · ${t('collectors.finished', { date: date(run.finishedAt) })}`}
           {run.exitCode !== undefined && ` · ${t('collectors.exitCode', { code: run.exitCode })}`}
         </Typography>
@@ -205,7 +219,7 @@ function RunList({
               <TableCell>
                 <RunStatus run={run} />
               </TableCell>
-              <TableCell>{run.triggeredBy}</TableCell>
+              <TableCell>{triggeredBy(run, t)}</TableCell>
               <TableCell>
                 {run.stats ? t('collectors.summary', totals(run.stats)) : (run.error ?? '')}
               </TableCell>

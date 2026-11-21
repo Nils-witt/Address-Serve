@@ -230,6 +230,15 @@
     "empty": "Keine Collectors gefunden. Lege ausführbare Dateien in den Collector-Ordner und lies ihn neu ein.",
     "deleteTitle": "{{name}} löschen?",
     "deleteMessage": "Seine Einstellungen und Läufe werden gelöscht. Seine Straßen, Hausnummern und Geo-Objekte werden zu manuellen Einträgen, die hier bearbeitet werden können, außer du löschst sie mit.",
-    "deleteData": "Auch seine Einträge löschen (Einträge, von denen andere abhängen, werden stattdessen manuell)"
+    "deleteData": "Auch seine Einträge löschen (Einträge, von denen andere abhängen, werden stattdessen manuell)",
+    "schedule": "Zeitplan",
+    "scheduleTitle": "Zeitplan von {{name}}",
+    "scheduleLabel": "Cron-Ausdruck",
+    "scheduleHelp": "Minute, Stunde, Tag des Monats, Monat und Wochentag, etwa „0 3 * * *“ für jede Nacht um 03:00, oder „@daily“, „@hourly“, „@every 6h“. Mit vorangestelltem CRON_TZ=Europe/Berlin legst du die Zeitzone fest; sonst gilt die des Servers. Leer lassen, um nur manuell zu starten.",
+    "scheduleExamples": "Beispiele",
+    "scheduleNone": "Nur manuell",
+    "scheduleRemove": "Zeitplan entfernen",
+    "nextRun": "nächster Lauf {{date}}",
+    "scheduleTrigger": "Zeitplan"
   }
 }

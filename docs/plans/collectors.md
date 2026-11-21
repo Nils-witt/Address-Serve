@@ -14,7 +14,7 @@ the collector owns.
 | # | Topic | Decision |
 |---|---|---|
 | D1 | Plugin form | **Executables** (subprocess), any language. They are not Go `.so` plugins, which were rejected because of cgo, the lack of Windows support and toolchain lockstep. |
-| D2 | Trigger | **Manual only**, via the API or UI. No schedule, and nothing runs at startup. |
+| D2 | Trigger | **Manually**, via the API or UI, or by an optional per-collector **cron schedule** an admin sets (`PUT /api/collectors/{id}/schedule`). Each due run is claimed in the database, so it starts on one instance only; runs missed while the app was down collapse into one at the next start. |
 | D3 | Result use | **Sync per collector**. The output is the full truth for the rows the collector owns: add, update, and delete what's missing. |
 | D4 | Output content | **Addresses + geo objects**. |
 | D5 | Address shape | **Flat**: one row per address. The app groups rows into streets. |

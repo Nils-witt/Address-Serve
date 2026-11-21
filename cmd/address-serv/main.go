@@ -99,8 +99,8 @@ func run() error {
 }
 
 // setUpCollectors configures the collector runner from the COLLECTOR*
-// variables, fails the runs a previous process left running, and scans the
-// collectors folder once. A folder that can't be scanned is logged, not
+// variables, fails the runs a previous process left running, scans the
+// collectors folder once, and starts the scheduler. A folder that can't be scanned is logged, not
 // fatal: it can be fixed and reloaded from the UI.
 func setUpCollectors(ctx context.Context, cs *store.CollectorStore) (api.CollectorConfig, error) {
 	if !collector.Supported {
@@ -127,6 +127,10 @@ func setUpCollectors(ctx context.Context, cs *store.CollectorStore) (api.Collect
 	} else {
 		log.Printf("collectors: %d known, folder %s", len(found), cfg.Dir)
 	}
+
+	// The scheduler lives as long as the process; runs it started are
+	// recovered by FailInterruptedRuns on the next start.
+	go runner.RunSchedules(ctx)
 
 	adminGroup := os.Getenv("COLLECTOR_ADMIN_GROUP")
 	if adminGroup == "" {

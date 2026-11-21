@@ -321,3 +321,45 @@ func (f collectorAPIFixture) configureDemoAfterReload() {
 	f.expect(http.MethodPost, "/api/collectors/reload", f.adminJWT, "", http.StatusOK, nil)
 	f.configureDemo()
 }
+
+func TestCollectorAPI_Schedule(t *testing.T) {
+	t.Parallel()
+
+	f := newCollectorAPIFixture(t)
+	f.configureDemoAfterReload()
+
+	path := "/api/collectors/demo/schedule"
+
+	f.expect(http.MethodPut, path, f.userJWT, `{"schedule":"@hourly"}`, http.StatusForbidden, nil)
+	f.expect(http.MethodPut, path, f.adminJWT, `{}`, http.StatusBadRequest, nil)
+	f.expect(http.MethodPut, path, f.adminJWT, `{"schedule":"61 * * * *"}`, http.StatusBadRequest, nil)
+	f.expect(http.MethodPut, "/api/collectors/nope/schedule", f.adminJWT, `{"schedule":"@hourly"}`, http.StatusNotFound, nil)
+
+	var view collectorView
+
+	f.expect(http.MethodPut, path, f.adminJWT, `{"schedule":"@every 1m"}`, http.StatusOK, &view)
+
+	if view.Schedule != "@every 1m" || view.NextRunAt == nil || time.Until(*view.NextRunAt) > time.Minute {
+		t.Fatalf("view = %+v, want the schedule and its next run within a minute", view)
+	}
+
+	// Nothing is due yet; a minute later the run starts, once.
+	f.runner.StartDueRuns(t.Context(), time.Now())
+	f.runner.StartDueRuns(t.Context(), view.NextRunAt.Add(time.Second))
+	f.runner.StartDueRuns(t.Context(), view.NextRunAt.Add(2*time.Second))
+	f.runner.Wait()
+
+	var runs []store.CollectorRun
+	f.expect(http.MethodGet, "/api/collectors/demo/runs", f.adminJWT, "", http.StatusOK, &runs)
+
+	if len(runs) != 1 || runs[0].TriggeredBy != store.TriggeredBySchedule || runs[0].Status != store.RunSucceeded {
+		t.Fatalf("runs = %+v, want one succeeded scheduled run", runs)
+	}
+
+	var removed collectorView
+	f.expect(http.MethodPut, path, f.adminJWT, `{"schedule":""}`, http.StatusOK, &removed)
+
+	if removed.Schedule != "" || removed.NextRunAt != nil {
+		t.Errorf("view = %+v, want no schedule", removed)
+	}
+}

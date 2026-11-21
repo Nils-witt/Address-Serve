@@ -261,6 +261,13 @@ export class ApiClient {
     return this.sendJsonForJson(`/api/collectors/${encodeURIComponent(id)}/settings`, 'PUT', input);
   }
 
+  /** Sets the cron expression that starts runs; empty removes it. */
+  updateCollectorSchedule(id: string, schedule: string): Promise<Collector> {
+    return this.sendJsonForJson(`/api/collectors/${encodeURIComponent(id)}/schedule`, 'PUT', {
+      schedule,
+    });
+  }
+
   /** Only for missing or invalid collectors. Their rows become manual ones,
    * unless `deleteData` is set. */
   deleteCollector(id: string, deleteData: boolean): Promise<void> {
