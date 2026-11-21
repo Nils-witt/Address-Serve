@@ -57,6 +57,11 @@ func migrate(db *gorm.DB) error {
 	return migrateHouseNumberKey(db)
 }
 
+// indexExistsQuery reports whether the named index exists in the schema that
+// unqualified names create tables and indexes in. A bare to_regclass would
+// search the whole search_path, and so could find another schema's index.
+const indexExistsQuery = "SELECT to_regclass(quote_ident(current_schema()) || '.' || quote_ident(?)) IS NOT NULL"
+
 // migrateIndexes creates the indexes AutoMigrate can't express.
 func migrateIndexes(db *gorm.DB) error {
 	indexes := []struct {
@@ -101,7 +106,7 @@ func migrateIndexes(db *gorm.DB) error {
 func migrateHouseNumberKey(db *gorm.DB) error {
 	var exists bool
 
-	err := db.Raw("SELECT to_regclass(?) IS NOT NULL", houseNumbersStreetNumberKey).Scan(&exists).Error
+	err := db.Raw(indexExistsQuery, houseNumbersStreetNumberKey).Scan(&exists).Error
 	if err != nil {
 		return fmt.Errorf("look up %s: %w", houseNumbersStreetNumberKey, err)
 	}
@@ -157,7 +162,7 @@ func migrateHouseNumberKey(db *gorm.DB) error {
 func migrateGeoObjectGroupNameKey(db *gorm.DB) error {
 	var exists bool
 
-	err := db.Raw("SELECT to_regclass(?) IS NOT NULL", geoObjectsGroupNameKey).Scan(&exists).Error
+	err := db.Raw(indexExistsQuery, geoObjectsGroupNameKey).Scan(&exists).Error
 	if err != nil {
 		return fmt.Errorf("look up %s: %w", geoObjectsGroupNameKey, err)
 	}

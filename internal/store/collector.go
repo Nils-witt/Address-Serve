@@ -1,10 +1,18 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/nils-witt/address-serve/internal/collector/contract"
 )
@@ -156,9 +164,241 @@ type SyncIssue struct {
 	RowID  *uuid.UUID `json:"rowId,omitempty"`
 }
 
+// Column names shared by collectors and collector_runs.
+const (
+	columnStatus = "status"
+	columnError  = "error"
+)
+
 // collectorRunsActiveKey is the unique index that allows one running run per
 // collector, created by Migrate.
 const collectorRunsActiveKey = "collector_runs_active_key"
 
 // MaxRunIssues caps the issues of each kind stored with a run.
 const MaxRunIssues = 1000
+
+var (
+	// ErrCollectorAvailable is returned when deleting a collector whose
+	// executable is still present and valid.
+	ErrCollectorAvailable = errors.New("only missing or invalid collectors can be deleted")
+
+	// ErrRunActive is returned when a collector already has a running run.
+	ErrRunActive = errors.New("the collector already has a running run")
+
+	// ErrInvalidSettings is wrapped by the errors of settings that don't fit
+	// the collector's schema.
+	ErrInvalidSettings = errors.New("invalid settings")
+)
+
+// CollectorStore reads and writes collectors, their runs, and syncs their
+// output.
+type CollectorStore struct {
+	db *gorm.DB
+}
+
+// NewCollectorStore returns a CollectorStore backed by db.
+func NewCollectorStore(db *gorm.DB) *CollectorStore {
+	return &CollectorStore{db: db}
+}
+
+// Discovered is a collector found in the collectors folder. Description is
+// nil when the collector is invalid, in which case Error says why.
+type Discovered struct {
+	ID          string
+	Path        string
+	Description *contract.Description
+	Error       string
+}
+
+// SaveDiscovered records the outcome of scanning the collectors folder: found
+// collectors are created or updated, and stored ones that weren't found are
+// marked missing. Settings are kept. An invalid collector keeps the metadata
+// of its last valid description, so the UI can still name it.
+func (cs *CollectorStore) SaveDiscovered(ctx context.Context, found []Discovered) error {
+	now := time.Now()
+
+	return cs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ids := make([]string, len(found))
+
+		for i, d := range found {
+			ids[i] = d.ID
+			c := Collector{ID: d.ID, Path: d.Path, Status: CollectorOK, DiscoveredAt: now, UpdatedAt: now}
+			columns := []string{"path", columnStatus, columnError, "updated_at"}
+
+			if d.Description == nil {
+				c.Status, c.Error = CollectorInvalid, &d.Error
+			} else {
+				c.Name, c.Version = d.Description.Name, d.Description.Version
+				c.Description = d.Description.Description
+				c.SettingsSchema = d.Description.Settings
+
+				columns = append(columns, "name", "version", "description", "settings_schema")
+			}
+
+			if c.SettingsSchema == nil {
+				c.SettingsSchema = []contract.SettingSpec{}
+			}
+
+			c.Settings = map[string]json.RawMessage{}
+
+			err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "id"}},
+				DoUpdates: clause.AssignmentColumns(columns),
+			}).Create(&c).Error
+			if err != nil {
+				return fmt.Errorf("save collector %s: %w", d.ID, err)
+			}
+		}
+
+		missing := tx.Model(&Collector{}).Where("status <> ?", CollectorMissing)
+		if len(ids) > 0 {
+			missing = missing.Where("id NOT IN ?", ids)
+		}
+
+		return missing.Updates(map[string]any{columnStatus: CollectorMissing, columnError: nil, "updated_at": now}).Error
+	})
+}
+
+// List returns every collector, ordered by ID.
+func (cs *CollectorStore) List(ctx context.Context) ([]Collector, error) {
+	collectors := []Collector{}
+	err := cs.db.WithContext(ctx).Order("id").Find(&collectors).Error
+
+	return collectors, err
+}
+
+// Get returns the collector with the given ID, or ErrNotFound.
+func (cs *CollectorStore) Get(ctx context.Context, id string) (Collector, error) {
+	var c Collector
+
+	err := cs.db.WithContext(ctx).Take(&c, "id = ?", id).Error
+
+	return c, notFound(err)
+}
+
+// SettingsInput replaces a collector's settings. Absent keys are unset,
+// except secrets, which are kept so that clients never need to know their
+// value; a JSON null unsets a secret too.
+type SettingsInput map[string]json.RawMessage
+
+// UpdateSettings validates input against the collector's schema, applies it,
+// and returns the updated collector. It returns ErrNotFound for an unknown
+// collector and an error wrapping ErrInvalidSettings for input that doesn't
+// fit the schema.
+func (cs *CollectorStore) UpdateSettings(ctx context.Context, id string, input SettingsInput) (Collector, error) {
+	var c Collector
+
+	err := cs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).Take(&c, "id = ?", id).Error
+		if err != nil {
+			return notFound(err)
+		}
+
+		settings, err := MergeSettings(c.SettingsSchema, c.Settings, input)
+		if err != nil {
+			return err
+		}
+
+		c.Settings, c.UpdatedAt = settings, time.Now()
+
+		return tx.Model(&c).Select("settings", "updated_at").Updates(&c).Error
+	})
+	if err != nil {
+		return Collector{}, err
+	}
+
+	return c, nil
+}
+
+// MergeSettings returns the settings that result from applying input to
+// current under schema; see SettingsInput.
+func MergeSettings(
+	schema []contract.SettingSpec, current map[string]json.RawMessage, input SettingsInput,
+) (map[string]json.RawMessage, error) {
+	specs := make(map[string]contract.SettingSpec, len(schema))
+	for _, s := range schema {
+		specs[s.Key] = s
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(input)) {
+		if _, ok := specs[key]; !ok {
+			return nil, fmt.Errorf("%w: unknown setting %q", ErrInvalidSettings, key)
+		}
+	}
+
+	merged := make(map[string]json.RawMessage, len(schema))
+
+	for _, spec := range schema {
+		value, given := input[spec.Key]
+
+		switch {
+		case given && isJSONNull(value):
+			continue
+		case given:
+			if err := spec.ValidateValue(value); err != nil {
+				return nil, fmt.Errorf("%w: %s %w", ErrInvalidSettings, spec.Key, err)
+			}
+
+			merged[spec.Key] = value
+		case spec.Type == contract.SettingSecret && current[spec.Key] != nil:
+			merged[spec.Key] = current[spec.Key]
+		}
+	}
+
+	return merged, nil
+}
+
+// MissingRequiredSettings returns the keys of required settings that have
+// neither a value nor a default.
+func (c Collector) MissingRequiredSettings() []string {
+	var missing []string
+
+	for _, s := range c.SettingsSchema {
+		if s.Required && c.Settings[s.Key] == nil && s.Default == nil {
+			missing = append(missing, s.Key)
+		}
+	}
+
+	return missing
+}
+
+func isJSONNull(v json.RawMessage) bool {
+	return strings.TrimSpace(string(v)) == "null"
+}
+
+// Delete removes a missing or invalid collector and its runs. Its rows
+// become manual ones, unless deleteData is set: then they are deleted as if
+// the collector had returned nothing, so rows that others depend on are
+// released rather than deleted. It returns ErrNotFound, ErrCollectorAvailable
+// for a collector that can still run, and ErrRunActive while it runs.
+func (cs *CollectorStore) Delete(ctx context.Context, id string, deleteData bool) error {
+	return cs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var c Collector
+
+		err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).Take(&c, "id = ?", id).Error
+		if err != nil {
+			return notFound(err)
+		}
+
+		if c.Status == CollectorOK {
+			return ErrCollectorAvailable
+		}
+
+		var running int64
+		if err := tx.Model(&CollectorRun{}).Where("collector_id = ? AND status = ?", id, RunRunning).Count(&running).Error; err != nil {
+			return err
+		}
+
+		if running > 0 {
+			return ErrRunActive
+		}
+
+		if deleteData {
+			if _, _, err := syncTx(tx, id, contract.Output{}, SyncOptions{}); err != nil {
+				return fmt.Errorf("delete data of collector %s: %w", id, err)
+			}
+		}
+
+		return tx.Delete(&Collector{}, "id = ?", id).Error
+	})
+}

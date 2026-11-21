@@ -74,7 +74,7 @@ func TestMigrate_Idempotent(t *testing.T) {
 		houseNumbersStreetNumberKey, houseNumbersExternalIDKey, streetsExternalIDKey, collectorRunsActiveKey,
 	} {
 		var exists bool
-		if err := db.Raw("SELECT to_regclass(?) IS NOT NULL", index).Scan(&exists).Error; err != nil {
+		if err := db.Raw(indexExistsQuery, index).Scan(&exists).Error; err != nil {
 			t.Fatal(err)
 		}
 

@@ -188,6 +188,14 @@ If none is that close, the object is skipped.
   another collector) are never changed. They're listed as conflicts. One
   exception: a manually created house number on one of the collector's own
   streets is **adopted** by the collector.
+- An entry that matches one of the collector's own rows but can't be applied
+  (for example a rename onto a name that's already taken, or a different
+  external ID) is reported as a conflict, and the row stays unchanged. It
+  isn't deleted. For a street, that includes its house numbers.
+- A street or house number the collector no longer returns is deleted. If
+  rows of others depend on it (a manual house number on the street, or
+  someone else's geo object at the house number), it is handed over to manual
+  ownership instead of being deleted.
 - Everything is applied in one transaction, so a failure applies nothing.
 - An empty output is valid, and it deletes everything the collector owns.
 
