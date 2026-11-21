@@ -21,6 +21,7 @@ tags:
   - name: geocoding
   - name: bulk
   - name: api-tokens
+  - name: collectors
   - name: ui
   - name: docs
 
@@ -1164,7 +1165,326 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/collectors:
+    get:
+      summary: List collectors
+      description: >-
+        Lists every collector found in the collectors folder, including missing
+        and invalid ones, each with its last run. Requires the admin claim
+        (COLLECTOR_ADMIN_CLAIM and COLLECTOR_ADMIN_VALUE); API tokens are
+        rejected.
+      operationId: listCollectors
+      tags: [collectors]
+      responses:
+        "200":
+          description: The collectors, ordered by ID
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+
+  /api/collectors/reload:
+    post:
+      summary: Rescan the collectors folder
+      description: >-
+        Rescans the collectors folder and runs `describe` on each executable.
+        Collectors that are no longer there are marked missing; their settings
+        and rows are kept.
+      operationId: reloadCollectors
+      tags: [collectors]
+      responses:
+        "200":
+          description: Every known collector after the scan
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+
+  /api/collectors/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CollectorID"
+    get:
+      summary: Get a collector
+      operationId: getCollector
+      tags: [collectors]
+      responses:
+        "200":
+          description: The collector
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a missing or invalid collector
+      description: >-
+        Deletes the collector and its runs. Its rows become manual ones, unless
+        deleteData is set: then they are deleted, except rows that others
+        depend on, which become manual.
+      operationId: deleteCollector
+      tags: [collectors]
+      parameters:
+        - name: deleteData
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "204":
+          description: Collector deleted
+        "400":
+          description: Invalid deleteData
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The collector is still available (status ok), or it is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/collectors/{id}/settings:
+    parameters:
+      - $ref: "#/components/parameters/CollectorID"
+    put:
+      summary: Replace a collector's settings
+      description: >-
+        Replaces the settings with the given object, keyed by setting key and
+        validated against the collector's settings schema. Absent settings are
+        unset, except secrets, which keep their value; null unsets a secret.
+      operationId: updateCollectorSettings
+      tags: [collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            example:
+              source_url: https://example.com/addresses.json
+              api_key: s3cret
+      responses:
+        "200":
+          description: The collector with its new settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collector"
+        "400":
+          description: The body is not an object, or a setting is unknown or has the wrong type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/collectors/{id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/CollectorID"
+    get:
+      summary: List a collector's runs
+      description: Lists the runs, newest first, without their issues and logs.
+      operationId: listCollectorRuns
+      tags: [collectors]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: The runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CollectorRun"
+        "400":
+          description: Invalid limit or offset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Start a run
+      description: >-
+        Starts the collector in the background and returns the running run.
+        Poll the run to follow it.
+      operationId: startCollectorRun
+      tags: [collectors]
+      responses:
+        "202":
+          description: The started run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorRun"
+        "400":
+          description: Required settings have no value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The collector is missing or invalid, or already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/collector-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      summary: Get a run
+      description: Returns the run with its issues and log.
+      operationId: getCollectorRun
+      tags: [collectors]
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectorRun"
+        "400":
+          description: Invalid run ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/collector-runs/{runId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      summary: Cancel a run
+      description: >-
+        Kills the collector process, or rolls back its sync. The run ends as
+        cancelled and nothing is applied.
+      operationId: cancelCollectorRun
+      tags: [collectors]
+      responses:
+        "202":
+          description: Cancellation requested
+        "400":
+          description: Invalid run ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/CollectorForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The run is not running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
+  parameters:
+    CollectorID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Collector ID, its filename up to the first dot
+      example: bonn
+    RunID:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    CollectorForbidden:
+      description: >-
+        Collector management is disabled, the request used an API token, or
+        the OIDC token lacks the admin claim
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -1626,6 +1946,173 @@ components:
           type: string
           description: Git branch the build was made from; empty when unknown.
           example: main
+
+    LocalizedText:
+      description: A plain string, or an object mapping two-letter language codes to strings
+      oneOf:
+        - type: string
+        - type: object
+          additionalProperties:
+            type: string
+      example:
+        en: Source URL
+        de: Quell-URL
+
+    CollectorSetting:
+      type: object
+      required: [key, label, type]
+      properties:
+        key:
+          type: string
+          example: source_url
+        label:
+          $ref: "#/components/schemas/LocalizedText"
+        description:
+          $ref: "#/components/schemas/LocalizedText"
+        type:
+          type: string
+          enum: [string, secret, integer, number, boolean]
+        required:
+          type: boolean
+        default:
+          description: The value used when none is set; never present for secrets
+
+    Collector:
+      type: object
+      required: [id, path, status, name, version, settingsSchema, settings, secretsSet, discoveredAt, updatedAt]
+      properties:
+        id:
+          type: string
+          example: bonn
+        path:
+          type: string
+          example: /collectors/bonn
+        status:
+          type: string
+          enum: [ok, invalid, missing]
+        error:
+          type: string
+          description: Why an invalid collector was rejected
+        name:
+          type: string
+          example: Bonn open data
+        version:
+          type: string
+          example: 1.0.0
+        description:
+          $ref: "#/components/schemas/LocalizedText"
+        settingsSchema:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollectorSetting"
+        settings:
+          type: object
+          additionalProperties: true
+          description: The values of the settings that are set, except secrets
+        secretsSet:
+          type: array
+          items:
+            type: string
+          description: The keys of the secret settings that have a value
+        discoveredAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastRun:
+          $ref: "#/components/schemas/CollectorRun"
+
+    EntityStats:
+      type: object
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+        adopted:
+          type: integer
+          description: Manual house numbers on the collector's streets that it took over
+        deleted: { type: integer }
+        released:
+          type: integer
+          description: Rows no longer returned that others depend on, turned into manual rows
+        skipped:
+          type: integer
+          description: Output entries not applied because they were invalid, repeated or could not be placed
+        conflicts:
+          type: integer
+          description: Output entries matching rows owned by others, which were left untouched
+
+    SyncIssue:
+      type: object
+      required: [kind, entity, key, reason]
+      properties:
+        kind:
+          type: string
+          enum: [skipped, conflict, adopted, released]
+        entity:
+          type: string
+          enum: [address, geoObject, street, houseNumber]
+        index:
+          type: integer
+          description: The entry's position in the output's addresses or geoObjects
+        key:
+          type: string
+          example: Adenauerallee 12a (Bonn-Zentrum, Bonn, DE)
+        reason:
+          type: string
+        rowId:
+          type: string
+          format: uuid
+          description: The stored row the issue is about
+
+    CollectorRun:
+      type: object
+      required: [id, collectorId, status, triggeredBy, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        collectorId:
+          type: string
+          example: bonn
+        status:
+          type: string
+          enum: [running, succeeded, failed, cancelled]
+        phase:
+          type: string
+          enum: [collecting, applying]
+          description: Set while the run is running
+        triggeredBy:
+          type: string
+          example: Ada Lovelace
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        exitCode:
+          type: integer
+        error:
+          type: string
+        stats:
+          type: object
+          properties:
+            streets:
+              $ref: "#/components/schemas/EntityStats"
+            houseNumbers:
+              $ref: "#/components/schemas/EntityStats"
+            geoObjects:
+              $ref: "#/components/schemas/EntityStats"
+        issues:
+          type: array
+          description: The first 1000 issues of each kind; only returned for a single run
+          items:
+            $ref: "#/components/schemas/SyncIssue"
+        log:
+          type: string
+          description: The tail of the collector's stderr; only returned for a single run
 
     Error:
       type: object

@@ -5,70 +5,13 @@ package collector
 import (
 	"encoding/json"
 	"errors"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/nils-witt/address-serve/internal/store"
+	"github.com/nils-witt/address-serve/internal/store/storetest"
 )
-
-// openIsolatedStore returns a CollectorStore whose tables live in a fresh
-// schema, dropped when the test ends: Reload marks every collector it
-// doesn't find as missing, which would disturb other tests' collectors.
-func openIsolatedStore(t *testing.T) *store.CollectorStore {
-	t.Helper()
-
-	dsn := os.Getenv("ADDRESS_SERV_TEST_DSN")
-	if dsn == "" {
-		t.Skip("ADDRESS_SERV_TEST_DSN not set")
-	}
-
-	admin, err := store.Open(t.Context(), dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close(admin) })
-
-	// The extensions live in public, where the schema's search_path finds
-	// them; Migrate creates them there if no other test did yet.
-	if err := store.Migrate(t.Context(), admin); err != nil {
-		t.Fatal(err)
-	}
-
-	schema := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if err := admin.Exec("CREATE SCHEMA " + schema).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = admin.Exec("DROP SCHEMA " + schema + " CASCADE").Error })
-
-	u, err := url.Parse(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	q := u.Query()
-	q.Set("search_path", schema+",public")
-	u.RawQuery = q.Encode()
-
-	db, err := store.Open(t.Context(), u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close(db) })
-
-	if err := store.Migrate(t.Context(), db); err != nil {
-		t.Fatal(err)
-	}
-
-	return store.NewCollectorStore(db)
-}
 
 // collectorScript is a collector that describes itself with one required
 // setting, street, and returns one address on that street. Its stdout and
@@ -94,7 +37,7 @@ type runnerFixture struct {
 func newRunnerFixture(t *testing.T, collectBody string, timeout time.Duration) runnerFixture {
 	t.Helper()
 
-	cs := openIsolatedStore(t)
+	cs := store.NewCollectorStore(storetest.OpenIsolated(t))
 	dir := t.TempDir()
 	writeScript(t, dir, "test.sh", collectorScript(collectBody))
 	writeScript(t, dir, "broken", "exit 1")

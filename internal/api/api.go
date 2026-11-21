@@ -21,6 +21,8 @@ type Config struct {
 	UI http.Handler
 	// UIConfig is served to the web UI at GET /ui-config.
 	UIConfig UIConfig
+	// Collectors wires the collector routes, which need the admin claim.
+	Collectors CollectorConfig
 }
 
 // NewHandler returns the root handler serving every API route, wrapped in
@@ -42,6 +44,11 @@ func NewHandler(
 	registerAddressSearchRoutes(mux, houseNumbers)
 	registerBulkRoutes(mux, bulk)
 	registerAPITokenRoutes(mux, tokens)
+
+	if cfg.Collectors.Runner != nil {
+		registerCollectorRoutes(mux, cfg.Collectors)
+	}
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
