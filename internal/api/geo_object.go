@@ -36,7 +36,7 @@ func writeGeoObjectWriteError(w http.ResponseWriter, err error) {
 	switch {
 	case isGeoObjectReferenceError(err):
 		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, store.ErrExternalIDTaken), errors.Is(err, store.ErrNameTaken):
+	case errors.Is(err, store.ErrExternalIDTaken), errors.Is(err, store.ErrNameTaken), errors.Is(err, store.ErrOwnedByCollector):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "geo object not found")
@@ -154,7 +154,6 @@ func handleUpdateGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 	}
 }
 
-//nolint:dupl // mirrors handleDeleteStreet and handleDeleteHouseNumber; distinct entity types make a shared generic handler less readable than the duplication
 func handleDeleteGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := idFromRequest(r)
@@ -163,14 +162,8 @@ func handleDeleteGeoObject(geoObjects *store.GeoObjectStore) http.HandlerFunc {
 			return
 		}
 
-		err = geoObjects.Delete(r.Context(), id)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "geo object not found")
-			return
-		}
-
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+		if err := geoObjects.Delete(r.Context(), id); err != nil {
+			writeGeoObjectWriteError(w, err)
 			return
 		}
 
@@ -197,6 +190,11 @@ func handleBulkDeleteGeoObjects(geoObjects *store.GeoObjectStore) http.HandlerFu
 		}
 
 		deleted, err := geoObjects.DeleteMany(r.Context(), refs)
+		if errors.Is(err, store.ErrOwnedByCollector) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return

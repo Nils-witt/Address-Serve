@@ -143,7 +143,7 @@ func handleUpdateHouseNumber(houseNumbers *store.HouseNumberStore) http.HandlerF
 			return
 		}
 
-		if errors.Is(err, store.ErrHouseNumberAlreadyExists) {
+		if errors.Is(err, store.ErrHouseNumberAlreadyExists) || errors.Is(err, store.ErrOwnedByCollector) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -174,6 +174,11 @@ func handleDeleteHouseNumber(houseNumbers *store.HouseNumberStore) http.HandlerF
 		err = houseNumbers.Delete(r.Context(), id)
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "house number not found")
+			return
+		}
+
+		if errors.Is(err, store.ErrOwnedByCollector) {
+			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
 

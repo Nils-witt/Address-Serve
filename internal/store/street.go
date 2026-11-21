@@ -168,12 +168,17 @@ func (st *StreetStore) Get(ctx context.Context, id uuid.UUID) (Street, error) {
 }
 
 // Update replaces the street with the given ID, except for its collector and
-// external ID. It returns ErrNotFound if it does not exist or
-// ErrStreetAlreadyExists on a uniqueness conflict.
+// external ID. It returns ErrNotFound if it does not exist, an error matching
+// ErrOwnedByCollector if a collector owns it, or ErrStreetAlreadyExists on a
+// uniqueness conflict.
 func (st *StreetStore) Update(ctx context.Context, id uuid.UUID, s Street) (Street, error) {
 	s.ID = id
 
 	err := updateRow(ctx, st.db, &s, collectorManagedColumns, gorm.ErrDuplicatedKey, ErrStreetAlreadyExists)
+	if errors.Is(err, ErrNotFound) {
+		err = refusal(st.db.WithContext(ctx), "street", nil, "streets", "id = ?", id)
+	}
+
 	if err != nil {
 		return Street{}, err
 	}
@@ -181,8 +186,20 @@ func (st *StreetStore) Update(ctx context.Context, id uuid.UUID, s Street) (Stre
 	return s, nil
 }
 
+// streetDependants are the rows deleting a street cascades to.
+var streetDependants = []dependants{{"house_numbers", "street_id"}, {"geo_objects", "street_id"}}
+
 // Delete removes the street with the given ID and, via cascade, its house
-// numbers. It returns ErrNotFound if no such street exists.
+// numbers and geo objects. It returns ErrNotFound if no such street exists,
+// and an error matching ErrOwnedByCollector if a collector owns it or any of
+// those rows.
 func (st *StreetStore) Delete(ctx context.Context, id uuid.UUID) error {
-	return requireOneRow(st.db.WithContext(ctx).Delete(&Street{}, "id = ?", id))
+	db := st.db.WithContext(ctx)
+
+	err := requireOneRow(db.Where(manualRow).Where(streetWithoutOwnedRows).Delete(&Street{}, "id = ?", id))
+	if errors.Is(err, ErrNotFound) {
+		return refusal(db, "street", streetDependants, "streets", "id = ?", id)
+	}
+
+	return err
 }

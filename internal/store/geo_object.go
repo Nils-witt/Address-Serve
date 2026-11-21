@@ -223,13 +223,13 @@ func (st *GeoObjectStore) Update(ctx context.Context, id uuid.UUID, g GeoObject)
 			omitted = append(omitted, "external_id")
 		}
 
-		res := tx.Model(&g).Select("*").Omit(omitted...).Updates(&g)
+		res := tx.Model(&g).Where(manualRow).Select("*").Omit(omitted...).Updates(&g)
 		if res.Error != nil {
 			return geoObjectWriteError(res.Error)
 		}
 
-		if err := requireOneRow(res); err != nil {
-			return err
+		if res.RowsAffected == 0 {
+			return refusal(tx, "geo object", nil, "geo_objects", "id = ?", id)
 		}
 
 		return tx.Take(&g, "id = ?", id).Error
@@ -273,10 +273,12 @@ func (st *GeoObjectStore) UpsertByExternalID(
 		var existing GeoObject
 
 		err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
-			Select("id").
+			Select("id", "collector_id").
 			Take(&existing, "external_id = ?", externalID).Error
 
 		switch {
+		case err == nil && existing.CollectorID != nil:
+			return ownedBy([]string{*existing.CollectorID}, "the geo object belongs to %s; only its runs can change it")
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			created = true
 			g.ID = uuid.Nil
@@ -295,15 +297,29 @@ func (st *GeoObjectStore) UpsertByExternalID(
 	return g, created, nil
 }
 
-// DeleteByExternalID removes the geo object with the given external ID, or
-// returns ErrNotFound.
+// DeleteByExternalID removes the geo object with the given external ID. It
+// returns ErrNotFound if there is none, and an error matching
+// ErrOwnedByCollector if a collector owns it.
 func (st *GeoObjectStore) DeleteByExternalID(ctx context.Context, externalID string) error {
-	return requireOneRow(st.db.WithContext(ctx).Delete(&GeoObject{}, "external_id = ?", externalID))
+	return st.deleteOne(ctx, "external_id = ?", externalID)
 }
 
-// Delete removes the geo object with the given ID, or returns ErrNotFound.
+// Delete removes the geo object with the given ID. It returns ErrNotFound if
+// there is none, and an error matching ErrOwnedByCollector if a collector
+// owns it.
 func (st *GeoObjectStore) Delete(ctx context.Context, id uuid.UUID) error {
-	return requireOneRow(st.db.WithContext(ctx).Delete(&GeoObject{}, "id = ?", id))
+	return st.deleteOne(ctx, "id = ?", id)
+}
+
+func (st *GeoObjectStore) deleteOne(ctx context.Context, cond string, arg any) error {
+	db := st.db.WithContext(ctx)
+
+	err := requireOneRow(db.Where(manualRow).Delete(&GeoObject{}, cond, arg))
+	if errors.Is(err, ErrNotFound) {
+		return refusal(db, "geo object", nil, "geo_objects", cond, arg)
+	}
+
+	return err
 }
 
 // MaxBulkDeleteGeoObjects caps the IDs plus external IDs of one
@@ -344,26 +360,45 @@ func (r GeoObjectRefs) Validate() error {
 	return nil
 }
 
-// DeleteMany removes every geo object named by refs in a single statement and
-// returns how many it removed. Refs that match no geo object are skipped, so
-// a repeated call is harmless.
+// DeleteMany removes every geo object named by refs and returns how many it
+// removed. Refs that match no geo object are skipped, so a repeated call is
+// harmless. If a collector owns any of them, none is removed and the error
+// matches ErrOwnedByCollector.
 func (st *GeoObjectStore) DeleteMany(ctx context.Context, refs GeoObjectRefs) (int64, error) {
-	query := st.db.WithContext(ctx)
+	var deleted int64
 
+	err := st.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var owners []string
+
+		err := refs.where(tx.Model(&GeoObject{})).Where("collector_id IS NOT NULL").
+			Distinct("collector_id").Order("collector_id").Pluck("collector_id", &owners).Error
+		if err != nil {
+			return err
+		}
+
+		if len(owners) > 0 {
+			return ownedBy(owners, "some of the geo objects belong to %s; only its runs can change them")
+		}
+
+		res := refs.where(tx).Delete(&GeoObject{})
+		deleted = res.RowsAffected
+
+		return res.Error
+	})
+
+	return deleted, err
+}
+
+// where narrows query to the geo objects r names.
+func (r GeoObjectRefs) where(query *gorm.DB) *gorm.DB {
 	switch {
-	case len(refs.IDs) > 0 && len(refs.ExternalIDs) > 0:
-		query = query.Where("id IN ? OR external_id IN ?", refs.IDs, refs.ExternalIDs)
-	case len(refs.IDs) > 0:
-		query = query.Where("id IN ?", refs.IDs)
-	case len(refs.ExternalIDs) > 0:
-		query = query.Where("external_id IN ?", refs.ExternalIDs)
+	case len(r.IDs) > 0 && len(r.ExternalIDs) > 0:
+		return query.Where("id IN ? OR external_id IN ?", r.IDs, r.ExternalIDs)
+	case len(r.IDs) > 0:
+		return query.Where("id IN ?", r.IDs)
 	default:
-		return 0, nil
+		return query.Where("external_id IN ?", r.ExternalIDs)
 	}
-
-	res := query.Delete(&GeoObject{})
-
-	return res.RowsAffected, res.Error
 }
 
 // checkHouseNumberOnStreet verifies that g's house number, if any, exists and

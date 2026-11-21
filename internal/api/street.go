@@ -140,7 +140,7 @@ func handleUpdateStreet(streets *store.StreetStore) http.HandlerFunc {
 		}
 
 		updated, err := streets.Update(r.Context(), id, s)
-		if errors.Is(err, store.ErrStreetAlreadyExists) {
+		if errors.Is(err, store.ErrStreetAlreadyExists) || errors.Is(err, store.ErrOwnedByCollector) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -171,6 +171,11 @@ func handleDeleteStreet(streets *store.StreetStore) http.HandlerFunc {
 		err = streets.Delete(r.Context(), id)
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "street not found")
+			return
+		}
+
+		if errors.Is(err, store.ErrOwnedByCollector) {
+			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
 

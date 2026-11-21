@@ -311,7 +311,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: A street with this name, district, city and country already exists
+          description: A street with this name, district, city and country already exists, or a collector owns the street
           content:
             application/json:
               schema:
@@ -338,6 +338,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Street not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Refused because a collector owns the street, or rows of a collector are on it
           content:
             application/json:
               schema:
@@ -578,7 +584,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: The street already has a house number with this number and addition
+          description: The street already has a house number with this number and addition, or a collector owns the house number
           content:
             application/json:
               schema:
@@ -605,6 +611,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: House number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Refused because a collector owns the house number, or geo objects of a collector point to it
           content:
             application/json:
               schema:
@@ -749,6 +761,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: Refused because a collector owns some of the geo objects; nothing is deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/geo-objects/{id}:
     parameters:
@@ -809,7 +827,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GeoObject"
         "409":
-          description: name is already used by another geo object in the same group, or externalId is already used by another geo object
+          description: name is already used by another geo object in the same group, or externalId is already used by another geo object, or a collector owns the geo object
           content:
             application/json:
               schema:
@@ -858,6 +876,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: Refused because a collector owns the geo object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/geo-objects/by-external-id/{externalId}:
     parameters:
@@ -899,7 +923,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GeoObject"
         "409":
-          description: name is already used by another geo object in the same group
+          description: name is already used by another geo object in the same group, or a collector owns the geo object
           content:
             application/json:
               schema:
@@ -938,6 +962,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Geo object not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Refused because a collector owns the geo object
           content:
             application/json:
               schema:

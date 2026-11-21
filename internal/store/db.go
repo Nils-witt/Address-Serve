@@ -80,10 +80,11 @@ func notFound(err error) error {
 
 // updateRow replaces every column of row except its primary key, which must
 // already be set, and the columns in keep, and fills row with the stored
-// result. A constraint violation matching conflict is mapped to conflictErr
-// and a zero row count to ErrNotFound.
+// result. Rows a collector owns are left alone. A constraint violation
+// matching conflict is mapped to conflictErr and a zero row count, for a
+// missing or owned row, to ErrNotFound.
 func updateRow(ctx context.Context, db *gorm.DB, row any, keep []string, conflict, conflictErr error) error {
-	res := db.WithContext(ctx).Model(row).Clauses(clause.Returning{}).
+	res := db.WithContext(ctx).Model(row).Clauses(clause.Returning{}).Where(manualRow).
 		Select("*").Omit(append([]string{"id"}, keep...)...).Updates(row)
 	if errors.Is(res.Error, conflict) {
 		return conflictErr

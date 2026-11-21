@@ -180,12 +180,17 @@ func (st *HouseNumberStore) Get(ctx context.Context, id uuid.UUID) (HouseNumber,
 }
 
 // Update replaces the house number with the given ID, except for its
-// collector and external ID. It returns ErrNotFound if it does not exist,
-// and the same errors as Create.
+// collector and external ID. It returns ErrNotFound if it does not exist, an
+// error matching ErrOwnedByCollector if a collector owns it, and the same
+// errors as Create.
 func (st *HouseNumberStore) Update(ctx context.Context, id uuid.UUID, h HouseNumber) (HouseNumber, error) {
 	h.ID = id
 
 	err := updateRow(ctx, st.db, &h, collectorManagedColumns, gorm.ErrForeignKeyViolated, ErrStreetNotFound)
+	if errors.Is(err, ErrNotFound) {
+		err = refusal(st.db.WithContext(ctx), "house number", nil, "house_numbers", "id = ?", id)
+	}
+
 	if err != nil {
 		return HouseNumber{}, houseNumberWriteError(err)
 	}
@@ -193,7 +198,17 @@ func (st *HouseNumberStore) Update(ctx context.Context, id uuid.UUID, h HouseNum
 	return h, nil
 }
 
-// Delete removes the house number with the given ID, or returns ErrNotFound.
+// Delete removes the house number with the given ID. It returns ErrNotFound
+// if it does not exist, and an error matching ErrOwnedByCollector if a
+// collector owns it or geo objects of one point to it, which the delete
+// would change.
 func (st *HouseNumberStore) Delete(ctx context.Context, id uuid.UUID) error {
-	return requireOneRow(st.db.WithContext(ctx).Delete(&HouseNumber{}, "id = ?", id))
+	db := st.db.WithContext(ctx)
+
+	err := requireOneRow(db.Where(manualRow).Where(houseNumberWithoutOwnedGeoObjects).Delete(&HouseNumber{}, "id = ?", id))
+	if errors.Is(err, ErrNotFound) {
+		return refusal(db, "house number", []dependants{{"geo_objects", "house_number_id"}}, "house_numbers", "id = ?", id)
+	}
+
+	return err
 }

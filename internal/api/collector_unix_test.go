@@ -134,8 +134,16 @@ func TestCollectorAPI_ConfigureAndRun(t *testing.T) {
 		t.Errorf("runs = %+v, last run = %+v", runs, view.LastRun)
 	}
 
-	if body := f.expect(http.MethodGet, "/api/streets?name=Main", admin, "", http.StatusOK, nil); !strings.Contains(body, `"collectorId":"demo"`) {
-		t.Errorf("streets = %s, want Main owned by demo", body)
+	var streets []store.Street
+	f.expect(http.MethodGet, "/api/streets?name=Main", admin, "", http.StatusOK, &streets)
+
+	if len(streets) != 1 || streets[0].CollectorID == nil || *streets[0].CollectorID != "demo" {
+		t.Fatalf("streets = %+v, want Main owned by demo", streets)
+	}
+
+	// Only the collector's runs may change its rows.
+	if body := f.expect(http.MethodDelete, "/api/streets/"+streets[0].ID.String(), f.userJWT, "", http.StatusConflict, nil); !strings.Contains(body, `collector \"demo\"`) {
+		t.Errorf("delete owned street = %s, want it to name the collector", body)
 	}
 
 	f.expect(http.MethodDelete, "/api/collectors/demo", admin, "", http.StatusConflict, nil)
