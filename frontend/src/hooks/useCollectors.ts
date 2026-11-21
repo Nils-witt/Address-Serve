@@ -27,7 +27,7 @@ export function useCollectors() {
   );
 }
 
-/** Whether the user may manage collectors, i.e. has the admin claim. Shares
+/** Whether the user may manage collectors, i.e. is in the admin group. Shares
  * its cache entry with useCollectors, so the collectors page opens with the
  * list already loaded. */
 export function useCollectorAccess(): boolean {
@@ -36,7 +36,7 @@ export function useCollectorAccess(): boolean {
     queryKey: queryKeys.collectors,
     queryFn: () => api.listCollectors(),
   });
-  // 403: no admin claim; 404: collectors are off on this server. Any other
+  // 403: not in the admin group; 404: collectors are off on this server. Any other
   // failure (a network error, say) still shows the page, which shows it.
   const refused = error instanceof ApiError && (error.status === 403 || error.status === 404);
   return isSuccess || (error !== null && !refused);

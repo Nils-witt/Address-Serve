@@ -27,7 +27,7 @@ export default function BaseLayout() {
   const [anchorElNav, setAnchorElNav] = useState<null | HTMLElement>(null);
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
 
-  // Only users with the admin claim may manage collectors.
+  // Only members of the admin group may manage collectors.
   const collectorAccess = useCollectorAccess();
   const tabs: { to: string; label: string }[] = [
     { to: ROUTES.streets, label: t('nav.streets') },

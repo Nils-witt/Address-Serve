@@ -1200,9 +1200,9 @@ paths:
       summary: List collectors
       description: >-
         Lists every collector found in the collectors folder, including missing
-        and invalid ones, each with its last run. Requires the admin claim
-        (COLLECTOR_ADMIN_CLAIM and COLLECTOR_ADMIN_VALUE); API tokens are
-        rejected.
+        and invalid ones, each with its last run. Requires membership in
+        the group COLLECTOR_ADMIN_GROUP names, as listed in the OIDC token's
+        groups claim; API tokens are rejected.
       operationId: listCollectors
       tags: [collectors]
       responses:
@@ -1503,7 +1503,7 @@ components:
     CollectorForbidden:
       description: >-
         Collector management is disabled, the request used an API token, or
-        the OIDC token lacks the admin claim
+        the user isn't in the admin group
       content:
         application/json:
           schema:

@@ -236,7 +236,7 @@ export class ApiClient {
     return this.del(`/api/tokens/${encodeURIComponent(id)}`);
   }
 
-  // ---- collectors (need the admin claim; 403 otherwise) -------------------
+  // ---- collectors (need the admin group; 403 otherwise) -------------------
 
   listCollectors(): Promise<Collector[]> {
     return this.getJson('/api/collectors');

@@ -38,7 +38,7 @@ the collector owns.
 | D23 | Discovery | The app scans **at startup** and when `POST /api/collectors/reload` is called. |
 | D24 | Identity | The **filename without extension** is the collector ID. A collector whose executable disappears is shown as `missing`, and its settings and owned rows are kept. |
 | D25 | Folder | `COLLECTORS_DIR`, which defaults to `collectors` **next to the binary** (`filepath.Dir(os.Executable())`). For `go run`, `COLLECTORS_DIR` must be set. |
-| D26 | Permissions | `COLLECTOR_ADMIN_CLAIM` (a dotted claim path, string or array) + `COLLECTOR_ADMIN_VALUE`. **All** collector routes, including reads, require it. If the vars are unset, the collector routes return `403`. **API tokens can never pass the check.** |
+| D26 | Permissions | Membership in the group `COLLECTOR_ADMIN_GROUP`, read from the OIDC token's `groups` claim. **All** collector routes, including reads, require it. If the var is unset, the collector routes return `403`. **API tokens can never pass the check.** (This replaced an earlier generic `COLLECTOR_ADMIN_CLAIM` + `COLLECTOR_ADMIN_VALUE` rule.) |
 | D27 | Manual edits | Collector-owned rows are **read-only** outside the collector. A mutating API route that would change or delete an owned row, directly or through an FK cascade or `SET NULL`, returns `409`. |
 | D28 | Stale owned row with foreign dependants | The app does **not** delete such a row. It **releases ownership** (sets it to manual) and reports it as `released`. This applies to streets with foreign house numbers or geo objects, and to house numbers that foreign geo objects point to (D36). |
 | D29 | House number key | Add a **unique index** on `(street_id, number, coalesce(number_addition, ''))`. Existing duplicates are reported at startup, following the `migrateGeoObjectGroupNameKey` pattern. |
@@ -352,7 +352,7 @@ At startup, runs left in `running` state are set to `failed` with the error
 
 ## 5. HTTP API (`internal/api/openapi.yaml`)
 
-Every route needs auth **plus** the admin claim (D26). Otherwise it returns `403`
+Every route needs auth **plus** membership in the admin group (D26). Otherwise it returns `403`
 with a clear message, including "API tokens cannot manage collectors".
 
 | Method & path | Purpose | Notable responses |
@@ -397,8 +397,7 @@ conflicting patterns.
 | `COLLECTOR_TIMEOUT` | `10m` | Go duration. The process is killed when it's reached. |
 | `COLLECTOR_GEO_MAX_DISTANCE_M` | `100` | Max distance in metres for the nearest-house-number fallback. |
 | `COLLECTOR_RUN_HISTORY` | `50` | Runs kept per collector. |
-| `COLLECTOR_ADMIN_CLAIM` | unset | Dotted claim path, such as `realm_access.roles` or `groups`. |
-| `COLLECTOR_ADMIN_VALUE` | unset | Required value. Matches a string claim or an element of an array claim. |
+| `COLLECTOR_ADMIN_GROUP` | unset | Group whose members may manage collectors, matched exactly against the token's `groups` claim. |
 
 Docker (D41): `docker-compose.yml` mounts `./collectors:/collectors:ro`, which
 is the default folder because the binary is at `/address-serv`. Collectors must
@@ -516,7 +515,7 @@ Where the implementation departs from, or adds to, the plan above:
   checks look only in the current schema. Concurrent migrations (several
   instances, or parallel tests) raced to create the same extension or index.
 - **UI access.** The Collectors tab is hidden when `GET /api/collectors`
-  answers 403 (no admin claim) or 404 (collectors are unsupported on the
+  answers 403 (not in the admin group) or 404 (collectors are unsupported on the
   server's OS).
 - **Test helper.** `internal/store/storetest.OpenIsolated` gives tests a
   migrated database in a schema of their own. Tests that reload collectors
