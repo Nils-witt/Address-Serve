@@ -410,7 +410,7 @@ be static binaries. `.goreleaser.yml` drops `windows` (D42).
 
 ```text
 internal/collector/          new package
-  contract.go                describe/collect DTOs, localized text, validation (contract v1)
+  contract/                  leaf package: describe/collect DTOs, localized text, validation (contract v1)
   discovery.go               folder scan, ID derivation, describe invocation
   exec_unix.go               //go:build unix: minimal env, temp dir, process group, timeout, cancel, stderr tail
   exec_other.go              //go:build !unix: stub that reports "collectors unsupported on this OS"
@@ -473,7 +473,7 @@ Following CLAUDE.md: table-driven, `t.Parallel()`, standard `testing` only.
 
 ## 9. Implementation order
 
-1. Contract doc + DTOs + validation (`internal/collector/contract.go`) + unit tests.
+1. Contract doc + DTOs + validation (`internal/collector/contract`, a leaf package so `store` and the runner can both import it) + unit tests.
 2. Migration: tables, `collector_id`, `streets.external_id`, house-number unique key + duplicate report.
 3. `CollectorStore` + `Sync` + store tests.
 4. Exec + discovery + runner + tests.

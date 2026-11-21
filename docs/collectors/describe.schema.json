@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nils-witt/address-serve/docs/collectors/describe.schema.json",
+  "title": "Collector describe output (contract v1)",
+  "type": "object",
+  "required": ["contractVersion", "name", "version"],
+  "properties": {
+    "contractVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "version": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "description": { "$ref": "#/$defs/localizedText1000" },
+    "settings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/setting" }
+    }
+  },
+  "$defs": {
+    "localizedText200": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 200 },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z]{2}$" },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      ]
+    },
+    "localizedText1000": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 1000 },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z]{2}$" },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        }
+      ]
+    },
+    "setting": {
+      "type": "object",
+      "required": ["key", "label", "type"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+        "label": { "$ref": "#/$defs/localizedText200" },
+        "description": { "$ref": "#/$defs/localizedText1000" },
+        "type": { "enum": ["string", "secret", "integer", "number", "boolean"] },
+        "required": { "type": "boolean" },
+        "default": true
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "secret" } } }, "then": { "not": { "required": ["default"] } } },
+        { "if": { "properties": { "type": { "const": "string" } } }, "then": { "properties": { "default": { "type": "string", "minLength": 1 } } } },
+        { "if": { "properties": { "type": { "const": "integer" } } }, "then": { "properties": { "default": { "type": "integer" } } } },
+        { "if": { "properties": { "type": { "const": "number" } } }, "then": { "properties": { "default": { "type": "number" } } } },
+        { "if": { "properties": { "type": { "const": "boolean" } } }, "then": { "properties": { "default": { "type": "boolean" } } } }
+      ]
+    }
+  }
+}
