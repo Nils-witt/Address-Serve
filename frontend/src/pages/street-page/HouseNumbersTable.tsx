@@ -1,6 +1,5 @@
 import {
   Button,
-  IconButton,
   Link,
   Paper,
   Table,
@@ -9,13 +8,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import { useTranslation } from 'react-i18next';
+import RowActions from '../../components/RowActions';
 import type { HouseNumber } from '../../api/types';
 import { formatCoordinates, formatHouseNumber, osmUrl } from '../../lib/format';
 import './HouseNumbersTable.scss';
@@ -70,16 +67,11 @@ export default function HouseNumbersTable({
                   </Link>
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title={t('common.edit')}>
-                    <IconButton size="small" onClick={() => onEdit(h)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('common.delete')}>
-                    <IconButton size="small" color="error" onClick={() => onDelete(h)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  <RowActions
+                    collectorId={h.collectorId}
+                    onEdit={() => onEdit(h)}
+                    onDelete={() => onDelete(h)}
+                  />
                 </TableCell>
               </TableRow>
             ))}

@@ -19,7 +19,8 @@
     "apiTokens": "API tokens",
     "logout": "Logout",
     "openNavMenu": "Open navigation menu",
-    "geoObjects": "Geo objects"
+    "geoObjects": "Geo objects",
+    "collectors": "Collectors"
   },
   "auth": {
     "sessionExpired": "Your session has expired. Please sign in again."
@@ -144,5 +145,89 @@
     "revoke": "Revoke",
     "revokeTitle": "Revoke token?",
     "revokeMessage": "Revoke the token \"{{name}}\"? Programs using it will lose access immediately."
+  },
+  "collectors": {
+    "managedBy": "Collector {{id}}",
+    "managedHint": "Kept in sync by the collector \"{{id}}\". Only its runs can change this.",
+    "title": "Collectors",
+    "intro": "Collectors are programs in the collectors folder that fetch addresses from a source. A run makes the streets, house numbers and geo objects the collector owns match what it returns.",
+    "reload": "Rescan folder",
+    "collector": "Collector",
+    "status": "Status",
+    "version": "Version",
+    "lastRun": "Last run",
+    "neverRun": "Never run",
+    "summary": "{{created}} created, {{updated}} updated, {{deleted}} deleted, {{problems}} skipped or in conflict",
+    "collectorStatus": {
+      "ok": "Ready",
+      "invalid": "Invalid",
+      "missing": "Missing"
+    },
+    "runStatus": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "phase": {
+      "collecting": "collecting",
+      "applying": "applying"
+    },
+    "run": "Run now",
+    "cancel": "Cancel run",
+    "cancelTitle": "Cancel the run?",
+    "cancelMessage": "The collector is stopped and nothing it returned is applied.",
+    "settings": "Settings",
+    "settingsTitle": "Settings of {{name}}",
+    "secretKeep": "Set. Leave empty to keep it.",
+    "secretClear": "Remove the stored value",
+    "invalidInteger": "Enter a whole number.",
+    "invalidNumber": "Enter a number.",
+    "history": "Runs",
+    "historyTitle": "Runs of {{name}}",
+    "allRuns": "All runs",
+    "noRuns": "This collector hasn't run yet.",
+    "started": "Started",
+    "triggeredBy": "Started by",
+    "result": "Result",
+    "startedBy": "Started {{date}} by {{name}}",
+    "finished": "finished {{date}}",
+    "exitCode": "exit code {{code}}",
+    "stats": {
+      "created": "Created",
+      "updated": "Updated",
+      "unchanged": "Unchanged",
+      "adopted": "Adopted",
+      "deleted": "Deleted",
+      "released": "Released",
+      "skipped": "Skipped",
+      "conflicts": "Conflicts"
+    },
+    "entities": {
+      "streets": "Streets",
+      "houseNumbers": "House numbers",
+      "geoObjects": "Geo objects",
+      "address": "Address",
+      "geoObject": "Geo object",
+      "street": "Street",
+      "houseNumber": "House number"
+    },
+    "issues_one": "{{count}} issue",
+    "issues_other": "{{count}} issues",
+    "issueKind": "Kind",
+    "issueEntry": "Entry",
+    "issueReason": "Reason",
+    "issueKinds": {
+      "skipped": "Skipped",
+      "conflict": "Conflict",
+      "adopted": "Adopted",
+      "released": "Released"
+    },
+    "log": "Log",
+    "logEmpty": "The collector wrote nothing to its log.",
+    "empty": "No collectors found. Put executables into the collectors folder and rescan it.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteMessage": "Its settings and runs are deleted. The streets, house numbers and geo objects it owns become manual ones that can be edited here, unless you delete them too.",
+    "deleteData": "Also delete the rows it owns (rows others depend on become manual instead)"
   }
 }

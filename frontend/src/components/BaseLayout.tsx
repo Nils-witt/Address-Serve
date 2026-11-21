@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import Footer from './Footer.tsx';
 import LanguageSwitcher from './LanguageSwitcher.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useCollectorAccess } from '../hooks/useCollectors.ts';
 import './BaseLayout.scss';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useState, type MouseEvent } from 'react';
@@ -26,10 +27,13 @@ export default function BaseLayout() {
   const [anchorElNav, setAnchorElNav] = useState<null | HTMLElement>(null);
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
 
+  // Only users with the admin claim may manage collectors.
+  const collectorAccess = useCollectorAccess();
   const tabs: { to: string; label: string }[] = [
     { to: ROUTES.streets, label: t('nav.streets') },
     { to: ROUTES.houseNumbers, label: t('nav.houseNumbers') },
     { to: ROUTES.geoObjects, label: t('nav.geoObjects') },
+    ...(collectorAccess ? [{ to: ROUTES.collectors, label: t('nav.collectors') }] : []),
   ];
 
   const handleOpenNavMenu = (event: MouseEvent<HTMLElement>) => {

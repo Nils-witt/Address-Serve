@@ -1,0 +1,28 @@
+.collectors-table {
+  padding: 16px 24px 24px;
+}
+
+.collectors-table__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.collectors-table__last-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.collectors-table__actions {
+  white-space: nowrap;
+}
+
+.collectors-table__empty {
+  padding: 24px;
+  text-align: center;
+}

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  IconButton,
   Paper,
   Table,
   TableBody,
@@ -10,12 +9,10 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import { useTranslation } from 'react-i18next';
+import RowActions from '../../components/RowActions';
 import type { Street } from '../../api/types';
 import { formatCoordinates } from '../../lib/format';
 import { ROUTES } from '../../routes';
@@ -74,16 +71,11 @@ export default function StreetsTable({
                   {formatCoordinates(s.latitude, s.longitude)}
                 </TableCell>
                 <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                  <Tooltip title={t('common.edit')}>
-                    <IconButton size="small" onClick={() => onEdit(s)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('common.delete')}>
-                    <IconButton size="small" color="error" onClick={() => onDelete(s)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  <RowActions
+                    collectorId={s.collectorId}
+                    onEdit={() => onEdit(s)}
+                    onDelete={() => onDelete(s)}
+                  />
                 </TableCell>
               </TableRow>
             ))}
