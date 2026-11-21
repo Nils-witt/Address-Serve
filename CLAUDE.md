@@ -13,6 +13,7 @@ An address lookup and management service: streets, house numbers and geo objects
   - `spa/`: serves the embedded SPA with an index.html fallback.
 - `internal/store/`: GORM (pgx driver) data access, one `XStore` per resource. `migrate.go` runs `AutoMigrate` and adds raw-SQL indexes on every startup. It needs the `cube` and `earthdistance` extensions for nearest-neighbour queries via `ll_to_earth`.
 - `frontend/`: Vite + React 19 + MUI + TanStack Query + i18next (locales `en` and `de`). `frontend/embed.go` embeds `frontend/dist`. `dist/.gitkeep` keeps the embed compiling before the first build.
+- `internal/collector/`: collectors, executables in `COLLECTORS_DIR` that return addresses for the app to sync. `contract/` holds the contract types (documented in `docs/collectors/contract.md`), the rest discovers collectors and runs them as processes (Unix only). The sync itself is `store.CollectorStore.Sync`. Rows have a `collector_id`; API writes to owned rows answer 409.
 - `import/`: Python scripts that load external data (such as Bonn's open data) through `POST /api/bulk`. They need `API_TOKEN` set.
 
 ## Commands

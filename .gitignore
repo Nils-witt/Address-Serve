@@ -10,3 +10,5 @@ __pycache__/
 
 
 skills-lock.json
+# Local collectors folder (see docs/collectors/contract.md)
+/collectors/

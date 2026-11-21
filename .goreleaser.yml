@@ -14,16 +14,13 @@ builds:
     main: ./cmd/address-serv
     env:
       - CGO_ENABLED=0
+    # Collectors need Unix process groups, so there is no Windows build.
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w
       - -X main.version={{ .Version }}

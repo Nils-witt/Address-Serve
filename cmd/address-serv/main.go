@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -15,6 +17,7 @@ import (
 	"github.com/nils-witt/address-serve/frontend"
 	"github.com/nils-witt/address-serve/internal/api"
 	"github.com/nils-witt/address-serve/internal/api/spa"
+	"github.com/nils-witt/address-serve/internal/collector"
 	"github.com/nils-witt/address-serve/internal/store"
 )
 
@@ -60,12 +63,18 @@ func run() error {
 		return fmt.Errorf("failed to load web UI: %w", err)
 	}
 
+	collectors, err := setUpCollectors(ctx, store.NewCollectorStore(db))
+	if err != nil {
+		return err
+	}
+
 	handler := api.NewHandler(
 		api.Config{
 			OIDC:              oidc,
 			CORSAllowedOrigin: getenvDefault("CORS_ALLOWED_ORIGIN", "*"),
 			UI:                ui,
 			UIConfig:          uiConfig(),
+			Collectors:        collectors,
 		},
 		store.NewStreetStore(db),
 		store.NewHouseNumberStore(db),
@@ -87,6 +96,75 @@ func run() error {
 	log.Printf("listening on %s", addr)
 
 	return server.ListenAndServe()
+}
+
+// setUpCollectors configures the collector runner from the COLLECTOR*
+// variables, fails the runs a previous process left running, and scans the
+// collectors folder once. A folder that can't be scanned is logged, not
+// fatal: it can be fixed and reloaded from the UI.
+func setUpCollectors(ctx context.Context, cs *store.CollectorStore) (api.CollectorConfig, error) {
+	if !collector.Supported {
+		log.Print("collectors are not supported on this OS; their routes are disabled")
+		return api.CollectorConfig{}, nil
+	}
+
+	cfg, err := collectorConfig()
+	if err != nil {
+		return api.CollectorConfig{}, err
+	}
+
+	if n, err := cs.FailInterruptedRuns(ctx); err != nil {
+		return api.CollectorConfig{}, fmt.Errorf("failed to recover collector runs: %w", err)
+	} else if n > 0 {
+		log.Printf("marked %d collector runs interrupted by the last shutdown as failed", n)
+	}
+
+	runner := collector.NewRunner(cs, cfg)
+
+	found, err := runner.Reload(ctx)
+	if err != nil {
+		log.Printf("collectors: %v", err)
+	} else {
+		log.Printf("collectors: %d known, folder %s", len(found), cfg.Dir)
+	}
+
+	admin := api.AdminClaim{Claim: os.Getenv("COLLECTOR_ADMIN_CLAIM"), Value: os.Getenv("COLLECTOR_ADMIN_VALUE")}
+	if admin.Claim == "" || admin.Value == "" {
+		log.Print("COLLECTOR_ADMIN_CLAIM or COLLECTOR_ADMIN_VALUE is unset; nobody can manage collectors")
+	}
+
+	return api.CollectorConfig{Runner: runner, Store: cs, Admin: admin}, nil
+}
+
+// collectorConfig reads the runner's settings from the environment.
+func collectorConfig() (collector.Config, error) {
+	cfg := collector.Config{Dir: os.Getenv("COLLECTORS_DIR")}
+
+	if cfg.Dir == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return collector.Config{}, fmt.Errorf("locate the collectors folder: %w; set COLLECTORS_DIR", err)
+		}
+
+		cfg.Dir = filepath.Join(filepath.Dir(exe), "collectors")
+	}
+
+	var err error
+
+	if cfg.Timeout, err = time.ParseDuration(getenvDefault("COLLECTOR_TIMEOUT", "10m")); err != nil || cfg.Timeout <= 0 {
+		return collector.Config{}, errors.New("COLLECTOR_TIMEOUT must be a positive duration such as 10m")
+	}
+
+	cfg.GeoMaxDistanceMeters, err = strconv.ParseFloat(getenvDefault("COLLECTOR_GEO_MAX_DISTANCE_M", "100"), 64)
+	if err != nil || cfg.GeoMaxDistanceMeters < 0 {
+		return collector.Config{}, errors.New("COLLECTOR_GEO_MAX_DISTANCE_M must be a non-negative number of metres")
+	}
+
+	if cfg.RunHistory, err = strconv.Atoi(getenvDefault("COLLECTOR_RUN_HISTORY", "50")); err != nil || cfg.RunHistory < 1 {
+		return collector.Config{}, errors.New("COLLECTOR_RUN_HISTORY must be a positive integer")
+	}
+
+	return cfg, nil
 }
 
 // oidcVerifier returns a verifier for tokens issued by the OpenID Connect
